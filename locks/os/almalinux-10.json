@@ -1,17 +1,146 @@
 {
   "schema_version": 1,
   "id": "almalinux-10",
-  "status": "pending",
+  "status": "locked",
   "distribution": "almalinux",
   "distribution_version": "10",
   "base": {
     "repository": "docker.io/library/almalinux",
-    "index_digest": null
+    "tag": "10.2-20260602",
+    "index_digest": "sha256:cc24bc5b6ac7e284f2f62a07bdaa1b15d3319fdcf46413c6b8fe9fa245068ddd",
+    "manifests": {
+      "amd64": "sha256:689dc4a86e288b3f88ced4bf14bef18cdaf5539609608ca4cebc62720740dfa2",
+      "arm64": "sha256:04bb86375be46ad90b21d321fedc77507c98c26f63c652281d0412152ddd8f25"
+    }
   },
-  "package_repository": {
-    "kind": "almalinux-repository",
-    "reference": null,
-    "metadata_sha256": null
-  },
-  "packages": []
+  "package_repositories": [
+    {
+      "id": "baseos",
+      "kind": "almalinux-repository",
+      "metadata": {
+        "amd64": {
+          "url": "https://repo.almalinux.org/almalinux/10.2/BaseOS/x86_64/os/repodata/repomd.xml",
+          "sha256": "f0ddd471353e16afea737988159e0e315678f4725f6c037489fd85956acee308"
+        },
+        "arm64": {
+          "url": "https://repo.almalinux.org/almalinux/10.2/BaseOS/aarch64/os/repodata/repomd.xml",
+          "sha256": "a27ccab0bc83a57bb1c05f476042730ad18fe8919173f0b529372ae410303c9d"
+        }
+      }
+    },
+    {
+      "id": "appstream",
+      "kind": "almalinux-repository",
+      "metadata": {
+        "amd64": {
+          "url": "https://repo.almalinux.org/almalinux/10.2/AppStream/x86_64/os/repodata/repomd.xml",
+          "sha256": "c1c2ab25a9e9f15ebf7e81cb4b085ecb3c5f485ad91db6eaf3ba6d7202004abc"
+        },
+        "arm64": {
+          "url": "https://repo.almalinux.org/almalinux/10.2/AppStream/aarch64/os/repodata/repomd.xml",
+          "sha256": "03cfe9f00b903ede551475cc380f1bd697891dc7eecda33148e9410a6ce79f6b"
+        }
+      }
+    },
+    {
+      "id": "crb",
+      "kind": "almalinux-repository",
+      "metadata": {
+        "amd64": {
+          "url": "https://repo.almalinux.org/almalinux/10.2/CRB/x86_64/os/repodata/repomd.xml",
+          "sha256": "4b6b71a5b4b7cb27bc6186cae66209942b47bb66c2e64ff6381173b759fdb4bb"
+        },
+        "arm64": {
+          "url": "https://repo.almalinux.org/almalinux/10.2/CRB/aarch64/os/repodata/repomd.xml",
+          "sha256": "044c05849b7a3e38a60f5871cd5504e3e47c90f3f21d50904cc2593541a5dab6"
+        }
+      }
+    },
+    {
+      "id": "extras",
+      "kind": "almalinux-repository",
+      "metadata": {
+        "amd64": {
+          "url": "https://repo.almalinux.org/almalinux/10.2/extras/x86_64/os/repodata/repomd.xml",
+          "sha256": "8dfd9fa0bfd51af7e666bd733b7205e3a43a07afd7b47f364722d0cfde091f1c"
+        },
+        "arm64": {
+          "url": "https://repo.almalinux.org/almalinux/10.2/extras/aarch64/os/repodata/repomd.xml",
+          "sha256": "737f2be77caacf3d787e62d69a15a84cabc60aa3b82bee328ffcfe05dcf94702"
+        }
+      }
+    },
+    {
+      "id": "epel",
+      "kind": "epel",
+      "metadata": {
+        "amd64": {
+          "url": "https://dl.fedoraproject.org/pub/epel/10/Everything/x86_64/repodata/repomd.xml",
+          "sha256": "d56bbe313e7a319f45882a14301daab94f7e1f7afb2f8055cb7eaad7baa57a94"
+        },
+        "arm64": {
+          "url": "https://dl.fedoraproject.org/pub/epel/10/Everything/aarch64/repodata/repomd.xml",
+          "sha256": "89069e0ea149d09262c6e3b25ca6e10ec58bf06a74078da48eb53f6774bce53d"
+        }
+      }
+    }
+  ],
+  "packages": {
+    "amd64": [
+      "bash-0:5.2.26-6.el10.x86_64",
+      "bind-utils-32:9.18.33-15.el10_2.10.x86_64",
+      "bzip2-0:1.0.8-25.el10.x86_64",
+      "ca-certificates-0:2025.2.80_v9.0.305-102.el10_1.noarch",
+      "curl-0:8.12.1-4.el10_2.4.x86_64",
+      "diffutils-0:3.10-8.el10.x86_64",
+      "epel-release-0:10-6.el10.noarch",
+      "file-0:5.45-9.el10.x86_64",
+      "findutils-1:4.10.0-5.el10.x86_64",
+      "git-0:2.52.0-1.el10.x86_64",
+      "glibc-langpack-en-0:2.39-128.el10_2.alma.1.x86_64",
+      "gzip-0:1.13-3.el10.x86_64",
+      "iproute-0:6.17.0-2.el10.x86_64",
+      "iputils-0:20240905-5.el10.x86_64",
+      "jq-0:1.7.1-11.el10_2.2.x86_64",
+      "lsof-0:4.98.0-7.el10.x86_64",
+      "openssh-clients-0:9.9p1-25.el10_2.alma.1.x86_64",
+      "patch-0:2.7.6-26.el10.x86_64",
+      "procps-ng-0:4.0.4-11.el10.x86_64",
+      "psmisc-0:23.6-8.el10.x86_64",
+      "ripgrep-0:14.1.1-1.el10_0.x86_64",
+      "shadow-utils-2:4.15.0-11.el10.x86_64",
+      "tar-2:1.35-11.el10.x86_64",
+      "tzdata-0:2026c-1.el10_2.alma.1.noarch",
+      "unzip-0:6.0-69.el10.x86_64",
+      "xz-1:5.6.2-4.el10_0.x86_64"
+    ],
+    "arm64": [
+      "bash-0:5.2.26-6.el10.aarch64",
+      "bind-utils-32:9.18.33-15.el10_2.10.aarch64",
+      "bzip2-0:1.0.8-25.el10.aarch64",
+      "ca-certificates-0:2025.2.80_v9.0.305-102.el10_1.noarch",
+      "curl-0:8.12.1-4.el10_2.4.aarch64",
+      "diffutils-0:3.10-8.el10.aarch64",
+      "epel-release-0:10-6.el10.noarch",
+      "file-0:5.45-9.el10.aarch64",
+      "findutils-1:4.10.0-5.el10.aarch64",
+      "git-0:2.52.0-1.el10.aarch64",
+      "glibc-langpack-en-0:2.39-128.el10_2.alma.1.aarch64",
+      "gzip-0:1.13-3.el10.aarch64",
+      "iproute-0:6.17.0-2.el10.aarch64",
+      "iputils-0:20240905-5.el10.aarch64",
+      "jq-0:1.7.1-11.el10_2.2.aarch64",
+      "lsof-0:4.98.0-7.el10.aarch64",
+      "openssh-clients-0:9.9p1-25.el10_2.alma.1.aarch64",
+      "patch-0:2.7.6-26.el10.aarch64",
+      "procps-ng-0:4.0.4-11.el10.aarch64",
+      "psmisc-0:23.6-8.el10.aarch64",
+      "ripgrep-0:14.1.1-1.el10_0.aarch64",
+      "shadow-utils-2:4.15.0-11.el10.aarch64",
+      "tar-2:1.35-11.el10.aarch64",
+      "tzdata-0:2026c-1.el10_2.alma.1.noarch",
+      "unzip-0:6.0-69.el10.aarch64",
+      "xz-1:5.6.2-4.el10_0.aarch64"
+    ]
+  }
 }

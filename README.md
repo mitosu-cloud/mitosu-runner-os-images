@@ -36,11 +36,47 @@ interpret a pending lock as a tag or floating version.
 - `jq` 1.6 or newer
 - the Python `jsonschema` command for JSON Schema validation
 - ShellCheck for `make lint`
+- Podman for image builds and smoke tests
 
 Build-time state defaults to `/tmp/mitosu-runner-os-images`. Set
 `MITOSU_BUILD_ROOT` to another absolute path only when the build host requires
 it. The repository never uses a directory under the checkout for layer caches,
 OCI layouts, or private staging.
+
+Podman is invoked with explicit graph root, run root, and temporary directories
+below that build root. It does not use the default container store.
+
+## Common image builds
+
+The Ubuntu and AlmaLinux OS locks contain dated base-index digests, both
+platform manifest digests, exact requested package versions, and checksums for
+every package-repository metadata file. Verify the external repository state:
+
+```sh
+make verify-inputs
+```
+
+Build one native common image after the runner lock has been resolved:
+
+```sh
+make build DISTRIBUTION=ubuntu-26.04
+```
+
+The checked-in runner lock remains pending until a multi-platform
+`ghcr.io/mitosu-cloud/mitosurunner` image is published and its digest is
+verified. Local pipeline work may provide `RUNNER_IMAGE` and
+`RUNNER_SOURCE_DIGEST` explicitly; both must be immutable digest references and
+the override is recorded in build and smoke reports. Overrides never update or
+bypass the release lock.
+
+Smoke a built image with no network and a read-only root filesystem:
+
+```sh
+make smoke IMAGE=localhost/mitosu/ubuntu-26.04-common:<commit>-amd64
+```
+
+Machine-readable build and smoke reports are written beneath
+`/tmp/mitosu-runner-os-images/reports` by default.
 
 See [architecture](docs/architecture.md),
 [adding an image](docs/adding-an-image.md), and

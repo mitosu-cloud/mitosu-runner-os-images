@@ -1,0 +1,78 @@
+# syntax=docker/dockerfile:1
+ARG BASE_IMAGE
+ARG RUNNER_IMAGE
+
+FROM ${RUNNER_IMAGE} AS runner
+FROM ${BASE_IMAGE} AS common
+
+ARG COMMON_PACKAGES
+ARG UBUNTU_SNAPSHOT
+ARG IMAGE_ID
+ARG TARGET_ARCH
+ARG RUNNER_SOURCE_DIGEST
+ARG SOURCE_REVISION
+ARG SOURCE_DATE_EPOCH
+ARG LOCK_DIGEST
+ARG CREATED
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    LANG=en_US.UTF-8 \
+    LC_ALL=en_US.UTF-8 \
+    TZ=Etc/UTC
+
+SHELL ["/bin/bash", "-euo", "pipefail", "-c"]
+
+COPY images/ubuntu/ubuntu.sources.in /tmp/ubuntu.sources.in
+RUN test -n "$UBUNTU_SNAPSHOT" \
+    && sed "s/@SNAPSHOT@/$UBUNTU_SNAPSHOT/g" /tmp/ubuntu.sources.in \
+       > /etc/apt/sources.list.d/ubuntu.sources \
+    && rm -f /tmp/ubuntu.sources.in \
+    && apt-get -o Acquire::https::Verify-Peer=false update \
+    && apt-get -o Acquire::https::Verify-Peer=false install \
+       --assume-yes --no-install-recommends $COMMON_PACKAGES \
+    && update-ca-certificates \
+    && locale-gen en_US.UTF-8 \
+    && ln -snf /usr/share/zoneinfo/Etc/UTC /etc/localtime \
+    && printf 'Etc/UTC\n' > /etc/timezone \
+    && groupadd --gid 1000 mitosu \
+    && useradd --uid 1000 --gid 1000 --create-home --shell /bin/bash mitosu \
+    && install -d -m 0755 /workspace /usr/share/mitosu \
+    && install -d -m 0750 -o 1000 -g 1000 \
+       /var/lib/mitosu/apps /var/cache/mitosu \
+    && dpkg-query -W -f='${binary:Package}\t${Version}\n' \
+       | LC_ALL=C sort > /usr/share/mitosu/packages.txt \
+    && rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/* /tmp/* \
+    && rm -f /etc/machine-id /var/lib/dbus/machine-id
+
+COPY --from=runner /usr/local/bin/mitosurunner /usr/local/bin/mitosurunner
+COPY images/common/write-marker.sh /usr/local/libexec/mitosu-write-marker
+RUN IMAGE_ID="$IMAGE_ID" \
+    DISTRIBUTION=ubuntu \
+    DISTRIBUTION_VERSION=26.04 \
+    TARGET_ARCH="$TARGET_ARCH" \
+    DEVELOPMENT_PROFILE=common \
+    PROFILE_REVISION=1 \
+    RUNNER_SOURCE_DIGEST="$RUNNER_SOURCE_DIGEST" \
+    SOURCE_REVISION="$SOURCE_REVISION" \
+    LOCK_DIGEST="$LOCK_DIGEST" \
+    CAPABILITIES_JSON='["shell","git"]' \
+    TOOLCHAINS_JSON='{"baseline":"1"}' \
+    /usr/local/libexec/mitosu-write-marker \
+    && rm -f /usr/local/libexec/mitosu-write-marker \
+    && test -x /usr/local/bin/mitosurunner
+
+COPY images/common/resolv.conf /etc/resolv.conf
+
+LABEL org.opencontainers.image.title="${IMAGE_ID}" \
+      org.opencontainers.image.description="Mitosu Ubuntu 26.04 development image baseline" \
+      org.opencontainers.image.created="${CREATED}" \
+      org.opencontainers.image.source="https://github.com/mitosu-cloud/mitosu-runner-os-images" \
+      org.opencontainers.image.revision="${SOURCE_REVISION}" \
+      org.opencontainers.image.licenses="Apache-2.0" \
+      dev.mitosu.image.id="${IMAGE_ID}" \
+      dev.mitosu.profile.revision="1" \
+      dev.mitosu.base.digest="${BASE_IMAGE}" \
+      dev.mitosu.runner.digest="${RUNNER_SOURCE_DIGEST}" \
+      dev.mitosu.lock.digest="${LOCK_DIGEST}"
+
+ENTRYPOINT ["/usr/local/bin/mitosurunner"]

@@ -41,6 +41,20 @@ that one data file. Cross-reference validation rejects image rows that name an
 undefined distribution or profile. The resolver expands each image over the
 declared architecture set and emits stable, sorted JSON.
 
+Each OS lock pins a dated OCI index and the `amd64` and `arm64` manifests it
+contains. Ubuntu package inputs use a fixed Snapshot Service timestamp and
+signed `InRelease` files. AlmaLinux package inputs use exact 10.2 repository
+URLs and checksum-lock each architecture's `repomd.xml`; EPEL is included only
+for the required `ripgrep` baseline. If any live official metadata differs from
+the lock, verification fails before the container build starts.
+
+The Ubuntu base image intentionally lacks a CA bundle. Its first APT operation
+therefore disables TLS peer verification only for that command. APT still
+verifies the archive-signed `InRelease` metadata and package hashes from the
+fixed snapshot, installs the exact locked CA package, and leaves no TLS override
+in the final filesystem. Subsequent guest HTTPS uses the normal public CA
+bundle.
+
 ## Temporary and build data
 
 All large or generated build state belongs under
