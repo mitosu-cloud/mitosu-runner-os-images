@@ -23,6 +23,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
 SHELL ["/bin/bash", "-euo", "pipefail", "-c"]
 
 COPY images/ubuntu/ubuntu.sources.in /tmp/ubuntu.sources.in
+COPY images/common/create-tool-user.sh /usr/local/libexec/mitosu-create-tool-user
 RUN test -n "$UBUNTU_SNAPSHOT" \
     && sed "s/@SNAPSHOT@/$UBUNTU_SNAPSHOT/g" /tmp/ubuntu.sources.in \
        > /etc/apt/sources.list.d/ubuntu.sources \
@@ -34,8 +35,8 @@ RUN test -n "$UBUNTU_SNAPSHOT" \
     && locale-gen en_US.UTF-8 \
     && ln -snf /usr/share/zoneinfo/Etc/UTC /etc/localtime \
     && printf 'Etc/UTC\n' > /etc/timezone \
-    && groupadd --gid 1000 mitosu \
-    && useradd --uid 1000 --gid 1000 --create-home --shell /bin/bash mitosu \
+    && /usr/local/libexec/mitosu-create-tool-user \
+    && rm -f /usr/local/libexec/mitosu-create-tool-user \
     && install -d -m 0755 /workspace /usr/share/mitosu \
     && install -d -m 0750 -o 1000 -g 1000 \
        /var/lib/mitosu/apps /var/cache/mitosu \
