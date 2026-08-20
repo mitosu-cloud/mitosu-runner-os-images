@@ -49,7 +49,8 @@ mitosu_build_root() {
       ;;
   esac
 
-  printf '%s\n' "$normalized"
+  requested=${requested%/}
+  printf '%s\n' "$requested"
 }
 
 ensure_build_root() {
