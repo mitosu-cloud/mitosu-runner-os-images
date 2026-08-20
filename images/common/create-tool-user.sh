@@ -19,6 +19,9 @@ elif [[ $existing_user != mitosu ]]; then
       printf 'refusing to replace unexpected UID 1000 home: %s\n' "$existing_home" >&2
       exit 1
     }
+    install -d -m 0750 -o 1000 -g 1000 /home/mitosu
+    cp -a -- "$existing_home/." /home/mitosu/
+    find "$existing_home" -xdev -mindepth 1 -delete
     rmdir -- "$existing_home"
   fi
   usermod --login mitosu --home /home/mitosu --shell /bin/bash "$existing_user"
@@ -27,3 +30,4 @@ fi
 test "$(id -u mitosu)" = 1000
 test "$(id -g mitosu)" = 1000
 install -d -m 0750 -o 1000 -g 1000 /home/mitosu
+chown -R 1000:1000 /home/mitosu
