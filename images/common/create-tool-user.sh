@@ -13,7 +13,15 @@ existing_user=$(getent passwd 1000 | cut -d: -f1 || true)
 if [[ -z $existing_user ]]; then
   useradd --uid 1000 --gid 1000 --create-home --shell /bin/bash mitosu
 elif [[ $existing_user != mitosu ]]; then
-  usermod --login mitosu --home /home/mitosu --move-home --shell /bin/bash "$existing_user"
+  existing_home=$(getent passwd 1000 | cut -d: -f6)
+  if [[ $existing_home != /home/mitosu ]]; then
+    [[ $existing_home == /home/* ]] || {
+      printf 'refusing to replace unexpected UID 1000 home: %s\n' "$existing_home" >&2
+      exit 1
+    }
+    rmdir -- "$existing_home"
+  fi
+  usermod --login mitosu --home /home/mitosu --shell /bin/bash "$existing_user"
 fi
 
 test "$(id -u mitosu)" = 1000
