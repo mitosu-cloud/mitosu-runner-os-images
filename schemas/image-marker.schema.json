@@ -1,0 +1,79 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://mitosu.dev/schemas/runner-os-image-marker-v1.json",
+  "title": "Mitosu runner OS image marker",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "image_id",
+    "profile_revision",
+    "distribution",
+    "distribution_version",
+    "architecture",
+    "development_profile",
+    "runner_protocol",
+    "runner_source_digest",
+    "tool_user",
+    "capabilities",
+    "toolchains",
+    "source_revision",
+    "lock_digest"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "image_id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9.-]*-[a-z][a-z0-9-]*$"
+    },
+    "profile_revision": { "type": "integer", "minimum": 1 },
+    "distribution": { "enum": ["ubuntu", "almalinux"] },
+    "distribution_version": {
+      "type": "string",
+      "pattern": "^[0-9]+(\\.[0-9]+)*$"
+    },
+    "architecture": { "enum": ["amd64", "arm64"] },
+    "development_profile": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*$"
+    },
+    "runner_protocol": { "const": "mitosu.runner.v1" },
+    "runner_source_digest": {
+      "type": "string",
+      "pattern": "^[a-z0-9._/-]+@sha256:[a-f0-9]{64}$"
+    },
+    "tool_user": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "uid", "gid"],
+      "properties": {
+        "name": { "const": "mitosu" },
+        "uid": { "const": 1000 },
+        "gid": { "const": 1000 }
+      }
+    },
+    "capabilities": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9-]*$"
+      }
+    },
+    "toolchains": {
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": { "pattern": "^[a-z][a-z0-9._-]*$" },
+      "additionalProperties": { "type": "string", "minLength": 1 }
+    },
+    "source_revision": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{40,64}$"
+    },
+    "lock_digest": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    }
+  }
+}

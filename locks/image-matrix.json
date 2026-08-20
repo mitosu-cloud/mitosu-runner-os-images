@@ -1,0 +1,110 @@
+{
+  "schema_version": 1,
+  "runner_lock": "locks/runner.json",
+  "architectures": ["amd64", "arm64"],
+  "distributions": [
+    {
+      "id": "ubuntu-26.04",
+      "family": "ubuntu",
+      "version": "26.04",
+      "containerfile": "images/ubuntu/Containerfile",
+      "os_lock": "locks/os/ubuntu-26.04.json"
+    },
+    {
+      "id": "almalinux-10",
+      "family": "almalinux",
+      "version": "10",
+      "containerfile": "images/almalinux/Containerfile",
+      "os_lock": "locks/os/almalinux-10.json"
+    }
+  ],
+  "profiles": [
+    {
+      "id": "rust",
+      "revision": 1,
+      "capabilities": ["shell", "git", "rust", "c", "cpp"],
+      "toolchain_lock": "locks/toolchains/rust.json",
+      "suggested_runtime_egress": [
+        "github.com",
+        "api.github.com",
+        "static.rust-lang.org",
+        "crates.io",
+        "index.crates.io",
+        "static.crates.io"
+      ]
+    },
+    {
+      "id": "go",
+      "revision": 1,
+      "capabilities": ["shell", "git", "go", "c"],
+      "toolchain_lock": "locks/toolchains/go.json",
+      "suggested_runtime_egress": [
+        "github.com",
+        "api.github.com",
+        "proxy.golang.org",
+        "sum.golang.org"
+      ]
+    },
+    {
+      "id": "node",
+      "revision": 1,
+      "capabilities": ["shell", "git", "node", "c", "cpp"],
+      "toolchain_lock": "locks/toolchains/node.json",
+      "suggested_runtime_egress": [
+        "github.com",
+        "api.github.com",
+        "nodejs.org",
+        "registry.npmjs.org"
+      ]
+    },
+    {
+      "id": "cpp",
+      "revision": 1,
+      "capabilities": ["shell", "git", "c", "cpp"],
+      "toolchain_lock": "locks/toolchains/cpp.json",
+      "suggested_runtime_egress": ["github.com", "api.github.com"]
+    }
+  ],
+  "images": [
+    {
+      "id": "ubuntu-26.04-rust",
+      "distribution": "ubuntu-26.04",
+      "profile": "rust"
+    },
+    {
+      "id": "ubuntu-26.04-go",
+      "distribution": "ubuntu-26.04",
+      "profile": "go"
+    },
+    {
+      "id": "ubuntu-26.04-node",
+      "distribution": "ubuntu-26.04",
+      "profile": "node"
+    },
+    {
+      "id": "ubuntu-26.04-cpp",
+      "distribution": "ubuntu-26.04",
+      "profile": "cpp"
+    },
+    {
+      "id": "almalinux-10-rust",
+      "distribution": "almalinux-10",
+      "profile": "rust"
+    },
+    {
+      "id": "almalinux-10-go",
+      "distribution": "almalinux-10",
+      "profile": "go"
+    },
+    {
+      "id": "almalinux-10-node",
+      "distribution": "almalinux-10",
+      "profile": "node"
+    },
+    {
+      "id": "almalinux-10-cpp",
+      "distribution": "almalinux-10",
+      "profile": "cpp"
+    }
+  ]
+}

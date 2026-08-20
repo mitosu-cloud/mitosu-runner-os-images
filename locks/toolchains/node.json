@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "profile": "node",
+  "status": "pending",
+  "versions": {},
+  "artifacts": [],
+  "distribution_packages": {
+    "ubuntu": ["build-essential", "make", "python3"],
+    "almalinux": ["gcc", "gcc-c++", "make", "python3"]
+  }
+}

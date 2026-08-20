@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "id": "almalinux-10",
+  "status": "pending",
+  "distribution": "almalinux",
+  "distribution_version": "10",
+  "base": {
+    "repository": "docker.io/library/almalinux",
+    "index_digest": null
+  },
+  "package_repository": {
+    "kind": "almalinux-repository",
+    "reference": null,
+    "metadata_sha256": null
+  },
+  "packages": []
+}

@@ -1,0 +1,31 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://mitosu.dev/schemas/runner-binary-lock-v1.json",
+  "title": "Mitosu runner image input lock",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "status", "repository", "index_digest", "binary_path"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "status": { "enum": ["pending", "locked"] },
+    "repository": {
+      "type": "string",
+      "pattern": "^[a-z0-9._/-]+$"
+    },
+    "index_digest": {
+      "oneOf": [
+        { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+        { "type": "null" }
+      ]
+    },
+    "binary_path": { "const": "/usr/local/bin/mitosurunner" }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "status": { "const": "locked" } } },
+      "then": {
+        "properties": { "index_digest": { "type": "string" } }
+      }
+    }
+  ]
+}

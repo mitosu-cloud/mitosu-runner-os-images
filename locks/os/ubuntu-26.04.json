@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "id": "ubuntu-26.04",
+  "status": "pending",
+  "distribution": "ubuntu",
+  "distribution_version": "26.04",
+  "base": {
+    "repository": "docker.io/library/ubuntu",
+    "index_digest": null
+  },
+  "package_repository": {
+    "kind": "ubuntu-snapshot",
+    "reference": null,
+    "metadata_sha256": null
+  },
+  "packages": []
+}

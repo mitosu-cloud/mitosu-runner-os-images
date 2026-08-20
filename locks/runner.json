@@ -1,0 +1,7 @@
+{
+  "schema_version": 1,
+  "status": "pending",
+  "repository": "ghcr.io/mitosu-cloud/mitosurunner",
+  "index_digest": null,
+  "binary_path": "/usr/local/bin/mitosurunner"
+}

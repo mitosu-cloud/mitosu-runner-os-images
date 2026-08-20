@@ -1,0 +1,57 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://mitosu.dev/schemas/runner-resolved-matrix-v1.json",
+  "title": "Resolved Mitosu runner OS image matrix",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "matrix_sha256", "entries"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "matrix_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "entries": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "image_id",
+          "architecture",
+          "distribution",
+          "distribution_version",
+          "development_profile",
+          "profile_revision",
+          "capabilities",
+          "containerfile",
+          "os_lock",
+          "toolchain_lock",
+          "runner_lock",
+          "suggested_runtime_egress"
+        ],
+        "properties": {
+          "image_id": { "type": "string", "minLength": 1 },
+          "architecture": { "enum": ["amd64", "arm64"] },
+          "distribution": { "enum": ["ubuntu", "almalinux"] },
+          "distribution_version": { "type": "string", "minLength": 1 },
+          "development_profile": { "type": "string", "minLength": 1 },
+          "profile_revision": { "type": "integer", "minimum": 1 },
+          "capabilities": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": { "type": "string" }
+          },
+          "containerfile": { "type": "string", "minLength": 1 },
+          "os_lock": { "type": "string", "minLength": 1 },
+          "toolchain_lock": { "type": ["string", "null"] },
+          "runner_lock": { "type": "string", "minLength": 1 },
+          "suggested_runtime_egress": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": { "type": "string" }
+          }
+        }
+      }
+    }
+  }
+}

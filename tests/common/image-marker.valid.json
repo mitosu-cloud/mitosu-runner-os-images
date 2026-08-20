@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "image_id": "ubuntu-26.04-rust",
+  "profile_revision": 1,
+  "distribution": "ubuntu",
+  "distribution_version": "26.04",
+  "architecture": "amd64",
+  "development_profile": "rust",
+  "runner_protocol": "mitosu.runner.v1",
+  "runner_source_digest": "ghcr.io/mitosu-cloud/mitosurunner@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "tool_user": {
+    "name": "mitosu",
+    "uid": 1000,
+    "gid": 1000
+  },
+  "capabilities": ["shell", "git", "rust", "c", "cpp"],
+  "toolchains": {
+    "rust": "1.0.0-test"
+  },
+  "source_revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "lock_digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+}

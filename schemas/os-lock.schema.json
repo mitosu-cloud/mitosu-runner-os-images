@@ -1,0 +1,91 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://mitosu.dev/schemas/runner-os-lock-v1.json",
+  "title": "Mitosu operating-system input lock",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "id",
+    "status",
+    "distribution",
+    "distribution_version",
+    "base",
+    "package_repository",
+    "packages"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*-[0-9]+(\\.[0-9]+)*$"
+    },
+    "status": { "enum": ["pending", "locked"] },
+    "distribution": { "enum": ["ubuntu", "almalinux"] },
+    "distribution_version": {
+      "type": "string",
+      "pattern": "^[0-9]+(\\.[0-9]+)*$"
+    },
+    "base": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "index_digest"],
+      "properties": {
+        "repository": {
+          "type": "string",
+          "pattern": "^[a-z0-9._/-]+$"
+        },
+        "index_digest": {
+          "oneOf": [
+            { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+            { "type": "null" }
+          ]
+        }
+      }
+    },
+    "package_repository": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "reference", "metadata_sha256"],
+      "properties": {
+        "kind": { "enum": ["ubuntu-snapshot", "almalinux-repository"] },
+        "reference": {
+          "type": ["string", "null"],
+          "minLength": 1
+        },
+        "metadata_sha256": {
+          "oneOf": [
+            { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+            { "type": "null" }
+          ]
+        }
+      }
+    },
+    "packages": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1 }
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "status": { "const": "locked" } } },
+      "then": {
+        "properties": {
+          "base": {
+            "properties": {
+              "index_digest": { "type": "string" }
+            }
+          },
+          "package_repository": {
+            "properties": {
+              "reference": { "type": "string" },
+              "metadata_sha256": { "type": "string" }
+            }
+          },
+          "packages": { "minItems": 1 }
+        }
+      }
+    }
+  ]
+}
