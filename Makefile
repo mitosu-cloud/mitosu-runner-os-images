@@ -12,7 +12,7 @@ help:
 	  'verify-inputs  verify locked OS repository metadata (requires network)' \
 	  'build     build one common image; set DISTRIBUTION and optional runner variables' \
 	  'smoke     smoke an image; set IMAGE to its local reference' \
-	  'verify    alias for the current common smoke/inspection suite' \
+	  'verify    run smoke, runner-byte, and stored-root inspection checks' \
 	  'clean     remove this project build root (outside the checkout)'
 
 validate:
@@ -44,9 +44,13 @@ build:
 	  if [[ -n "$(RUNNER_SOURCE_DIGEST)" ]]; then args+=(--runner-source-digest "$(RUNNER_SOURCE_DIGEST)"); fi; \
 	  ./scripts/build-images.sh "$${args[@]}"
 
-smoke verify:
+smoke:
 	@test -n "$(IMAGE)" || { echo 'error: set IMAGE to a local immutable image reference' >&2; exit 2; }
 	@./scripts/smoke-images.sh --image "$(IMAGE)"
+
+verify:
+	@test -n "$(IMAGE)" || { echo 'error: set IMAGE to a local immutable image reference' >&2; exit 2; }
+	@./scripts/verify-images.sh --image "$(IMAGE)"
 
 clean:
 	@./scripts/clean-build-root.sh

@@ -75,8 +75,17 @@ Smoke a built image with no network and a read-only root filesystem:
 make smoke IMAGE=localhost/mitosu/ubuntu-26.04-common:<commit>-amd64
 ```
 
+Run the complete common-image verification, including byte-for-byte runner
+comparison and inspection of the resolver stored in the OCI layers:
+
+```sh
+make verify IMAGE=localhost/mitosu/ubuntu-26.04-common:<commit>-amd64
+```
+
 Machine-readable build and smoke reports are written beneath
-`/tmp/mitosu-runner-os-images/reports` by default.
+`/tmp/mitosu-runner-os-images/reports` by default. Podman storage, OCI archives,
+and temporary inspection data also remain beneath
+`/tmp/mitosu-runner-os-images`.
 
 See [architecture](docs/architecture.md),
 [adding an image](docs/adding-an-image.md), and
