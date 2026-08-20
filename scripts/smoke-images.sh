@@ -126,7 +126,6 @@ runner_version=$(run_podman run --rm --network none --read-only \
 
 run_podman run --rm --network none --read-only \
   --security-opt no-new-privileges \
-  --user 1000:1000 \
   --env HOME=/home/mitosu \
   --env HTTP_PROXY= \
   --env HTTPS_PROXY= \
@@ -135,13 +134,14 @@ run_podman run --rm --network none --read-only \
   --env https_proxy= \
   --env all_proxy= \
   --entrypoint /bin/bash \
-  --tmpfs /home/mitosu:rw,uid=1000,gid=1000,mode=0700 \
-  --tmpfs /workspace:rw,uid=1000,gid=1000,mode=0750 \
-  --tmpfs /var/lib/mitosu/apps:rw,uid=1000,gid=1000,mode=0750 \
-  --tmpfs /var/cache/mitosu:rw,uid=1000,gid=1000,mode=0750 \
+  --tmpfs /home/mitosu:rw,mode=0700 \
+  --tmpfs /workspace:rw,mode=0750 \
+  --tmpfs /var/lib/mitosu/apps:rw,mode=0750 \
+  --tmpfs /var/cache/mitosu:rw,mode=0750 \
   --tmpfs /run:rw,mode=0755 \
-  --tmpfs /tmp:rw,uid=1000,gid=1000,mode=1777 \
+  --tmpfs /tmp:rw,mode=1777 \
   --volume "$REPOSITORY_ROOT/tests/common/smoke.sh:/opt/mitosu-common-smoke:ro" \
-  "$image_reference" /opt/mitosu-common-smoke
+  "$image_reference" -c \
+  'chown 1000:1000 /home/mitosu /workspace /var/lib/mitosu/apps /var/cache/mitosu && exec setpriv --reuid=1000 --regid=1000 --init-groups /opt/mitosu-common-smoke'
 
 status=passed
