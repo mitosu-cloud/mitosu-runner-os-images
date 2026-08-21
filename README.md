@@ -62,12 +62,11 @@ Build one native common image after the runner lock has been resolved:
 make build DISTRIBUTION=ubuntu-26.04
 ```
 
-The checked-in runner lock remains pending until a multi-platform
-`ghcr.io/mitosu-cloud/mitosurunner` image is published and its digest is
-verified. Local pipeline work may provide `RUNNER_IMAGE` and
-`RUNNER_SOURCE_DIGEST` explicitly; both must be immutable digest references and
-the override is recorded in build and smoke reports. Overrides never update or
-bypass the release lock.
+The checked-in runner lock selects the public multi-platform
+`ghcr.io/mitosu-cloud/mitosurunner` image by immutable OCI index digest. Local
+pipeline work may provide `RUNNER_IMAGE` and `RUNNER_SOURCE_DIGEST` explicitly;
+both must be immutable digest references and the override is recorded in build
+and smoke reports. Overrides never update or bypass the release lock.
 
 Smoke a built image with no network and a read-only root filesystem:
 
