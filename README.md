@@ -102,6 +102,11 @@ both architectures with emulation available, invoke the script directly:
   --allow-emulated
 ```
 
+Cross-architecture builds require an enabled `binfmt_misc` QEMU handler with
+the fix-binary flag. On Ubuntu hosts, install `qemu-user-static` and activate
+`systemd-binfmt` before selecting `--allow-emulated`. The publisher validates
+the handler before it authenticates, builds, or pushes anything.
+
 The script authenticates to GHCR with the current `gh` session, refuses to
 overwrite an existing release tag, verifies every image before pushing, and
 writes immutable references and registry digests beneath

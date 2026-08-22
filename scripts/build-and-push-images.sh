@@ -117,6 +117,25 @@ for architecture in "${architectures[@]}"; do
   fi
 done
 
+require_emulation_handler() {
+  local architecture=$1
+  local handler_name
+  local handler_path
+
+  case $architecture in
+    amd64) handler_name=qemu-x86_64 ;;
+    arm64) handler_name=qemu-aarch64 ;;
+    *) die "no emulation handler mapping for architecture: $architecture" ;;
+  esac
+  handler_path="/proc/sys/fs/binfmt_misc/$handler_name"
+  [[ -r $handler_path ]] ||
+    die "no $handler_name binfmt handler for $architecture; install qemu-user-static and activate systemd-binfmt before using --allow-emulated"
+  grep -qx 'enabled' "$handler_path" ||
+    die "$handler_name binfmt handler is not enabled"
+  grep -Eq '^flags:.*F' "$handler_path" ||
+    die "$handler_name binfmt handler lacks the fix-binary flag required for rootless container builds"
+}
+
 source_revision=$(git -C "$REPOSITORY_ROOT" rev-parse HEAD)
 source_short=${source_revision:0:12}
 matrix="$REPOSITORY_ROOT/locks/image-matrix.json"
@@ -147,6 +166,12 @@ if [[ $dry_run == true ]]; then
   printf '%s\n' "$plan"
   exit 0
 fi
+
+for architecture in "${architectures[@]}"; do
+  if [[ $architecture != "$host_architecture" ]]; then
+    require_emulation_handler "$architecture"
+  fi
+done
 
 if ! git -C "$REPOSITORY_ROOT" diff --quiet \
   || ! git -C "$REPOSITORY_ROOT" diff --cached --quiet \
