@@ -1,0 +1,60 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://mitosu.dev/schemas/runtime-pack-release-handoff-v1.json",
+  "title": "Mitosu runtime-pack release handoff",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "pack_id",
+    "source",
+    "manifest_sha256",
+    "public_key_hex"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "pack_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9_-][A-Za-z0-9._-]*$"
+    },
+    "source": {
+      "oneOf": [
+        { "$ref": "#/definitions/directorySource" },
+        { "$ref": "#/definitions/httpsSource" }
+      ]
+    },
+    "manifest_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "public_key_hex": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    }
+  },
+  "definitions": {
+    "directorySource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "path"],
+      "properties": {
+        "type": { "const": "directory" },
+        "path": { "type": "string", "pattern": "^/" }
+      }
+    },
+    "httpsSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "base_url"],
+      "properties": {
+        "type": { "const": "https" },
+        "base_url": {
+          "type": "string",
+          "pattern": "^https://[^?#]+/$"
+        }
+      }
+    }
+  }
+}

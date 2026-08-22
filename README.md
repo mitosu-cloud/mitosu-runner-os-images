@@ -86,6 +86,38 @@ Machine-readable build and smoke reports are written beneath
 and temporary inspection data also remain beneath
 `/tmp/mitosu-runner-os-images`.
 
+## Signed runtime-pack handoff
+
+The repository can assemble and verify the exact runtime-pack format consumed
+by `mitosuagent`. A pack binds the selected kernel and runner bytes plus
+digest-pinned initfs and tool-image references. Generation and signing are
+separate so a build job never needs the protected release key:
+
+```sh
+make runtime-pack \
+  PACK_ID=apple-container-0.41.0-arm64 \
+  KERNEL=/absolute/path/to/vmlinux \
+  RUNNER=/absolute/path/to/mitosurunner \
+  INITFS=ghcr.io/example/vminit@sha256:<digest> \
+  TOOL_IMAGE=ghcr.io/example/tool-image@sha256:<digest> \
+  IMAGE_SET=/absolute/path/to/image-set.json
+
+make sign-runtime-pack \
+  RUNTIME_PACK_DIR=/tmp/mitosu-runner-os-images/runtime-packs/apple-container-0.41.0-arm64 \
+  SIGNING_KEY=/protected/path/to/ed25519-private-key.pem \
+  RUNTIME_PACK_SOURCE=/absolute/installed/release/directory
+
+make verify-runtime-pack \
+  RUNTIME_PACK_DIR=/tmp/mitosu-runner-os-images/runtime-packs/apple-container-0.41.0-arm64
+```
+
+Signing writes `release-handoff.json`. That file supplies the three values a
+trusted `mitosuagent` configuration needs: the HTTPS source URL or absolute
+directory path, the SHA-256 of the exact `manifest.json` bytes, and the
+lowercase-hex 32-byte Ed25519 public key. The private key is never copied into
+the pack. See the [release policy](docs/release.md) for publication gates and
+key handling.
+
 See [architecture](docs/architecture.md),
 [adding an image](docs/adding-an-image.md), and
 [release policy](docs/release.md) for the contracts that future build phases

@@ -46,6 +46,8 @@ validate_json_schema \
   "$REPOSITORY_ROOT/tests/common/image-set.valid.json"
 pass 'marker and release-manifest fixtures validate'
 
+"$TEST_DIR/runtime-pack-contract.sh"
+
 invalid_marker="$test_staging/invalid-marker.json"
 jq '.tool_user.uid = 0' "$REPOSITORY_ROOT/tests/common/image-marker.valid.json" >"$invalid_marker"
 if validate_json_schema "$REPOSITORY_ROOT/schemas/image-marker.schema.json" "$invalid_marker" \
