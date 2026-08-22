@@ -38,6 +38,6 @@ if "$REPOSITORY_ROOT/scripts/build-and-push-images.sh" \
     >"$staging/invalid.stdout" 2>"$staging/invalid.stderr"; then
   fail 'publication script accepted an unsafe release tag'
 fi
-rg --fixed-strings --quiet -- '--tag must be' "$staging/invalid.stderr" ||
+grep -Fq -- '--tag must be' "$staging/invalid.stderr" ||
   fail 'publication script did not explain the rejected release tag'
 pass 'GHCR publication rejects unsafe release tags'

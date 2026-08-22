@@ -82,9 +82,9 @@ while (($# > 0)); do
 done
 
 require_command git
+require_command grep
 require_command jq
 require_command realpath
-require_command rg
 
 [[ -n $release_tag ]] || die '--tag is required'
 [[ $release_tag =~ ^[a-z0-9][a-z0-9._-]{0,63}$ ]] ||
@@ -196,7 +196,7 @@ if gh api --paginate "$package_endpoint/versions?per_page=100" \
     --jq '.[] | .metadata.container.tags[]?' \
     >"$existing_tags" 2>"$package_error"; then
   :
-elif rg --quiet 'HTTP 404|Not Found' "$package_error"; then
+elif grep -Eq 'HTTP 404|Not Found' "$package_error"; then
   : >"$existing_tags"
 else
   cat "$package_error" >&2
@@ -215,7 +215,7 @@ for distribution in "${distributions[@]}"; do
   fi
 done
 for target_tag in "${target_tags[@]}"; do
-  if rg --fixed-strings --line-regexp --quiet "$target_tag" "$existing_tags"; then
+  if grep -Fqx -- "$target_tag" "$existing_tags"; then
     die "refusing to overwrite existing GHCR tag: $repository:$target_tag"
   fi
 done

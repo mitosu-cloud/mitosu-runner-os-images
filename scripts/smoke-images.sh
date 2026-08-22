@@ -42,7 +42,7 @@ done
 [[ -n $image_reference ]] || die '--image is required'
 require_command jq
 require_command jsonschema
-require_command rg
+require_command grep
 
 started_at=$(date +%s)
 status=failed
@@ -159,7 +159,7 @@ while IFS= read -r locked_package; do
       ;;
     *) die "unsupported distribution family for inventory verification: $distribution_id" ;;
   esac
-  rg --fixed-strings --line-regexp --quiet "$inventory_entry" "$inventory_path" ||
+  grep -Fqx -- "$inventory_entry" "$inventory_path" ||
     die "locked package is absent from image inventory: $locked_package"
 done < <(jq -r --arg architecture "$architecture" '.packages[$architecture][]' "$absolute_lock")
 

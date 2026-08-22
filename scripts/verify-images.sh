@@ -41,8 +41,8 @@ done
 [[ -n $image_reference ]] || die '--image is required'
 require_command awk
 require_command cmp
+require_command grep
 require_command jq
-require_command rg
 require_command tar
 
 "$SCRIPT_DIR/smoke-images.sh" --image "$image_reference"
@@ -77,10 +77,10 @@ mapfile -t layers < <(jq -r '.layers[].digest' "$manifest_path")
 resolver_found=false
 for ((layer_index=${#layers[@]} - 1; layer_index >= 0; layer_index--)); do
   layer_path="$layout_directory/blobs/sha256/${layers[$layer_index]#sha256:}"
-  if tar -tf "$layer_path" | rg --quiet '(^|\./)etc/\.wh\.resolv\.conf$'; then
+  if tar -tf "$layer_path" | grep -Eq '(^|\./)etc/\.wh\.resolv\.conf$'; then
     die 'resolver is absent from the effective image root filesystem'
   fi
-  resolver_path=$(tar -tf "$layer_path" | rg '(^|\./)etc/resolv\.conf$' | tail -n 1 || true)
+  resolver_path=$(tar -tf "$layer_path" | grep -E '(^|\./)etc/resolv\.conf$' | tail -n 1 || true)
   if [[ -n $resolver_path ]]; then
     tar -xOf "$layer_path" "$resolver_path" > "$staging_directory/resolv.conf"
     resolver_found=true
