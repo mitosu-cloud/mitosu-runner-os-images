@@ -114,6 +114,9 @@ The active `gh` token needs `read:packages` and `write:packages`. GitHub creates
 a package pushed from the command line as private by default; after the first
 push, make `runner-os` public in the organization package settings. The script
 records the observed visibility and warns until that one-time setting is done.
+Use a classic PAT and authorize it for organization SSO when the organization
+requires SAML authorization; the publisher checks `write:packages` before it
+starts a build.
 
 Machine-readable build and smoke reports are written beneath
 `/tmp/mitosu-runner-os-images/reports` by default. Podman storage, OCI archives,

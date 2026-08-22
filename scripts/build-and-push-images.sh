@@ -83,6 +83,7 @@ done
 
 require_command git
 require_command grep
+require_command find
 require_command jq
 require_command realpath
 
@@ -190,6 +191,25 @@ cleanup() {
 }
 trap cleanup EXIT
 
+auth_response="$staging/github-auth-response.txt"
+gh api --include user >"$auth_response"
+oauth_scopes=$(awk '
+  BEGIN { IGNORECASE = 1 }
+  /^x-oauth-scopes:/ {
+    sub(/^[^:]+:[[:space:]]*/, "")
+    gsub(/\r/, "")
+    print
+    exit
+  }
+' "$auth_response")
+normalized_scopes=${oauth_scopes//[[:space:]]/}
+case ",$normalized_scopes," in
+  *,write:packages,*) ;;
+  *)
+    die 'active gh credential lacks write:packages; use a classic PAT with GHCR write access and authorize organization SSO if required'
+    ;;
+esac
+
 existing_tags="$staging/existing-tags.txt"
 package_error="$staging/package-error.txt"
 if gh api --paginate "$package_endpoint/versions?per_page=100" \
@@ -224,10 +244,6 @@ gh auth token --hostname github.com | \
   run_podman login "$registry" --username "$registry_user" --password-stdin >/dev/null
 logged_in=true
 
-release_parent=$(dirname -- "$release_directory")
-mkdir -p -- "$release_parent"
-chmod 0700 -- "$release_parent"
-mkdir -m 0700 -- "$release_directory"
 images='[]'
 for distribution in "${distributions[@]}"; do
   image_id="$distribution-common"
@@ -313,6 +329,18 @@ for distribution in "${distributions[@]}"; do
 done
 
 package_visibility=$(gh api "$package_endpoint" --jq .visibility)
+release_parent=$(dirname -- "$release_directory")
+mkdir -p -- "$release_parent"
+chmod 0700 -- "$release_parent"
+if [[ -e $release_directory ]]; then
+  [[ -d $release_directory && ! -L $release_directory ]] ||
+    die "release report path is not a safe directory: $release_directory"
+  [[ -z $(find "$release_directory" -mindepth 1 -maxdepth 1 -print -quit) ]] ||
+    die "refusing to overwrite a non-empty release report directory: $release_directory"
+  chmod 0700 -- "$release_directory"
+else
+  mkdir -m 0700 -- "$release_directory"
+fi
 jq -S -n \
   --arg repository "$repository" \
   --arg release_tag "$release_tag" \
