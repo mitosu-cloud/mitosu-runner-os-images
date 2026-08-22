@@ -1,7 +1,7 @@
 SHELL := /usr/bin/env bash
 .DEFAULT_GOAL := help
 
-.PHONY: help validate resolve test lint verify-inputs build smoke verify runtime-pack sign-runtime-pack verify-runtime-pack clean
+.PHONY: help validate resolve test lint verify-inputs build smoke verify publish runtime-pack sign-runtime-pack verify-runtime-pack clean
 
 help:
 	@printf '%s\n' \
@@ -13,6 +13,7 @@ help:
 	  'build     build one common image; set DISTRIBUTION and optional runner variables' \
 	  'smoke     smoke an image; set IMAGE to its local reference' \
 	  'verify    run smoke, runner-byte, and stored-root inspection checks' \
+	  'publish   build, verify, and push current images; set RELEASE_TAG and optional ARCHITECTURE' \
 	  'runtime-pack  generate a consumer-compatible pack; set PACK_ID, KERNEL, RUNNER, INITFS, TOOL_IMAGE' \
 	  'sign-runtime-pack  sign a pack; set RUNTIME_PACK_DIR, SIGNING_KEY, and RUNTIME_PACK_SOURCE' \
 	  'verify-runtime-pack  verify a signed pack; set RUNTIME_PACK_DIR' \
@@ -54,6 +55,14 @@ smoke:
 verify:
 	@test -n "$(IMAGE)" || { echo 'error: set IMAGE to a local immutable image reference' >&2; exit 2; }
 	@./scripts/verify-images.sh --image "$(IMAGE)"
+
+publish:
+	@test -n "$(RELEASE_TAG)" || { echo 'error: set RELEASE_TAG' >&2; exit 2; }
+	@args=(--tag "$(RELEASE_TAG)"); \
+	  if [[ -n "$(ARCHITECTURE)" ]]; then args+=(--architecture "$(ARCHITECTURE)"); fi; \
+	  if [[ "$(ALLOW_EMULATED)" == 1 ]]; then args+=(--allow-emulated); fi; \
+	  if [[ -n "$(REPOSITORY)" ]]; then args+=(--repository "$(REPOSITORY)"); fi; \
+	  ./scripts/build-and-push-images.sh "$${args[@]}"
 
 runtime-pack:
 	@test -n "$(PACK_ID)" || { echo 'error: set PACK_ID' >&2; exit 2; }

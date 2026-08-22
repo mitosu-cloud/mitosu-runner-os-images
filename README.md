@@ -81,6 +81,38 @@ comparison and inspection of the resolver stored in the OCI layers:
 make verify IMAGE=localhost/mitosu/ubuntu-26.04-common:<commit>-amd64
 ```
 
+Build, verify, and push every currently implemented image to GHCR with a
+release tag. The default destination is the intended public package
+`ghcr.io/mitosu-cloud/runner-os`, and build storage remains under `/tmp`:
+
+```sh
+make publish RELEASE_TAG=v0.1.0
+```
+
+The native host architecture is selected by default. To intentionally build
+both architectures with emulation available, invoke the script directly:
+
+```sh
+./scripts/build-and-push-images.sh \
+  --tag v0.1.0 \
+  --architecture amd64 \
+  --architecture arm64 \
+  --allow-emulated
+```
+
+The script authenticates to GHCR with the current `gh` session, refuses to
+overwrite an existing release tag, verifies every image before pushing, and
+writes immutable references and registry digests beneath
+`/tmp/mitosu-runner-os-images/releases/`. The current buildable set is the
+Ubuntu and AlmaLinux common images. The eight language-profile images remain
+excluded until their pending toolchain locks and Containerfile stages are
+implemented.
+
+The active `gh` token needs `read:packages` and `write:packages`. GitHub creates
+a package pushed from the command line as private by default; after the first
+push, make `runner-os` public in the organization package settings. The script
+records the observed visibility and warns until that one-time setting is done.
+
 Machine-readable build and smoke reports are written beneath
 `/tmp/mitosu-runner-os-images/reports` by default. Podman storage, OCI archives,
 and temporary inspection data also remain beneath
