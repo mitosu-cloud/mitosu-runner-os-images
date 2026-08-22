@@ -224,6 +224,9 @@ gh auth token --hostname github.com | \
   run_podman login "$registry" --username "$registry_user" --password-stdin >/dev/null
 logged_in=true
 
+release_parent=$(dirname -- "$release_directory")
+mkdir -p -- "$release_parent"
+chmod 0700 -- "$release_parent"
 mkdir -m 0700 -- "$release_directory"
 images='[]'
 for distribution in "${distributions[@]}"; do
