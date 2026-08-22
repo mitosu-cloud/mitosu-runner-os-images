@@ -59,6 +59,7 @@ bundle.
 
 All large or generated build state belongs under
 `${MITOSU_BUILD_ROOT:-/tmp/mitosu-runner-os-images}`. The scripts reject a
-relative build root and any build root located inside the source checkout.
-Private transient directories use `mktemp` beneath that root and cleanup traps
-remove only the directory created by the current process.
+relative build root, the shared `/tmp` root itself, and any location that does
+not resolve beneath `/tmp`. Private transient directories use `mktemp` beneath
+that dedicated root and cleanup traps remove only the directory created by the
+current process.

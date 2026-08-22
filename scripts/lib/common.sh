@@ -37,12 +37,19 @@ sha256_file() {
 mitosu_build_root() {
   local requested=${MITOSU_BUILD_ROOT:-$DEFAULT_MITOSU_BUILD_ROOT}
   local normalized
+  local temporary_root
 
   [[ $requested == /* ]] || die 'MITOSU_BUILD_ROOT must be an absolute path'
   require_command realpath
   normalized=$(realpath -m -- "$requested")
+  temporary_root=$(realpath -m -- /tmp)
 
-  [[ $normalized != / ]] || die 'MITOSU_BUILD_ROOT must not be the filesystem root'
+  [[ $normalized != "$temporary_root" ]] ||
+    die 'MITOSU_BUILD_ROOT must be a dedicated directory beneath /tmp'
+  case "$normalized/" in
+    "$temporary_root/"*) ;;
+    *) die 'MITOSU_BUILD_ROOT must resolve beneath /tmp' ;;
+  esac
   case "$normalized/" in
     "$REPOSITORY_ROOT/"*)
       die 'MITOSU_BUILD_ROOT must be outside the source checkout'

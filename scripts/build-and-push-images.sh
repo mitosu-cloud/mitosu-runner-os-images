@@ -21,7 +21,7 @@ Usage: scripts/build-and-push-images.sh --tag TAG [options]
 
 Build, verify, and push every image target currently implemented by this
 repository. Build storage and reports remain under MITOSU_BUILD_ROOT, which
-defaults to /tmp/mitosu-runner-os-images.
+defaults to /tmp/mitosu-runner-os-images and must resolve beneath /tmp.
 
 Options:
   --tag TAG                  Release tag component, such as v0.1.0

@@ -22,7 +22,7 @@ run_podman() {
   mkdir -p -- "$podman_root" "$podman_runroot" "$podman_tmp"
   chmod 700 -- "$podman_root" "$podman_runroot" "$podman_tmp"
 
-  XDG_RUNTIME_DIR="$podman_runroot" command podman \
+  TMPDIR="$podman_tmp" XDG_RUNTIME_DIR="$podman_runroot" command podman \
     --root "$podman_root" \
     --runroot "$podman_runroot" \
     --tmpdir "$podman_tmp" \

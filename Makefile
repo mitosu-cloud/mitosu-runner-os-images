@@ -1,6 +1,10 @@
 SHELL := /usr/bin/env bash
 .DEFAULT_GOAL := help
 
+MITOSU_BUILD_ROOT ?= /tmp/mitosu-runner-os-images
+TMPDIR := /tmp
+export MITOSU_BUILD_ROOT TMPDIR
+
 .PHONY: help validate resolve test lint verify-inputs build smoke verify publish runtime-pack sign-runtime-pack verify-runtime-pack clean
 
 help:

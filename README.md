@@ -38,10 +38,12 @@ interpret a pending lock as a tag or floating version.
 - ShellCheck for `make lint`
 - Podman for image builds and smoke tests
 
-Build-time state defaults to `/tmp/mitosu-runner-os-images`. Set
-`MITOSU_BUILD_ROOT` to another absolute path only when the build host requires
-it. The repository never uses a directory under the checkout for layer caches,
-OCI layouts, or private staging.
+Build-time state is confined to `/tmp` and defaults to
+`/tmp/mitosu-runner-os-images`. `MITOSU_BUILD_ROOT` may select another dedicated
+directory only when it still resolves beneath `/tmp`; paths in the checkout,
+the home directory, and other local filesystems are rejected. The repository
+never uses the checkout for layer caches, OCI layouts, reports, or private
+staging.
 
 Podman is invoked with explicit graph root, run root, and temporary directories
 below that build root. It does not use the default container store.

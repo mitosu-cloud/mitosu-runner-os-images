@@ -48,6 +48,7 @@ pass 'marker and release-manifest fixtures validate'
 
 "$TEST_DIR/runtime-pack-contract.sh"
 "$TEST_DIR/publish-script-contract.sh"
+"$TEST_DIR/build-root-contract.sh"
 
 invalid_marker="$test_staging/invalid-marker.json"
 jq '.tool_user.uid = 0' "$REPOSITORY_ROOT/tests/common/image-marker.valid.json" >"$invalid_marker"
