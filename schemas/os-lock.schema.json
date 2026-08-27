@@ -1,0 +1,141 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://mitosu.dev/schemas/runner-os-lock-v1.json",
+  "title": "Mitosu operating-system input lock",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "id",
+    "status",
+    "distribution",
+    "distribution_version",
+    "base",
+    "package_repositories",
+    "packages"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*-[0-9]+(\\.[0-9]+)*$"
+    },
+    "status": { "enum": ["pending", "locked"] },
+    "distribution": { "enum": ["ubuntu", "almalinux"] },
+    "distribution_version": {
+      "type": "string",
+      "pattern": "^[0-9]+(\\.[0-9]+)*$"
+    },
+    "base": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "tag", "index_digest", "manifests"],
+      "properties": {
+        "repository": {
+          "type": "string",
+          "pattern": "^[a-z0-9._/-]+$"
+        },
+        "tag": { "type": ["string", "null"], "minLength": 1 },
+        "index_digest": {
+          "oneOf": [
+            { "$ref": "#/definitions/ociDigest" },
+            { "type": "null" }
+          ]
+        },
+        "manifests": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["amd64", "arm64"],
+              "properties": {
+                "amd64": { "$ref": "#/definitions/ociDigest" },
+                "arm64": { "$ref": "#/definitions/ociDigest" }
+              }
+            },
+            { "type": "null" }
+          ]
+        }
+      }
+    },
+    "package_repositories": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "$ref": "#/definitions/packageRepository" }
+    },
+    "packages": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["amd64", "arm64"],
+      "properties": {
+        "amd64": { "$ref": "#/definitions/packageList" },
+        "arm64": { "$ref": "#/definitions/packageList" }
+      }
+    }
+  },
+  "definitions": {
+    "ociDigest": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "packageList": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 3 }
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["url", "sha256"],
+      "properties": {
+        "url": { "type": "string", "pattern": "^https://" },
+        "sha256": { "$ref": "#/definitions/sha256" }
+      }
+    },
+    "packageRepository": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "metadata"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+        "kind": { "enum": ["ubuntu-snapshot", "almalinux-repository", "epel"] },
+        "metadata": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["amd64", "arm64"],
+          "properties": {
+            "amd64": { "$ref": "#/definitions/metadata" },
+            "arm64": { "$ref": "#/definitions/metadata" }
+          }
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "status": { "const": "locked" } } },
+      "then": {
+        "properties": {
+          "base": {
+            "properties": {
+              "tag": { "type": "string" },
+              "index_digest": { "$ref": "#/definitions/ociDigest" },
+              "manifests": { "type": "object" }
+            }
+          },
+          "package_repositories": { "minItems": 1 },
+          "packages": {
+            "properties": {
+              "amd64": { "minItems": 1 },
+              "arm64": { "minItems": 1 }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

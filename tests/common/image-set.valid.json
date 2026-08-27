@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "source_repository": "https://github.com/mitosu-cloud/mitosu-runner-os-images",
+  "source_revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "created": "2026-08-20T00:00:00Z",
+  "runner_source_digest": "ghcr.io/mitosu-cloud/mitosurunner@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "images": [
+    {
+      "image_id": "ubuntu-26.04-rust",
+      "profile_revision": 1,
+      "index_digest": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "architectures": {
+        "amd64": {
+          "manifest_digest": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+          "marker_digest": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+          "sbom": "oci://example.invalid/sbom-amd64",
+          "provenance": "oci://example.invalid/provenance-amd64",
+          "native_smoke": "passed"
+        },
+        "arm64": {
+          "manifest_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+          "marker_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+          "sbom": "oci://example.invalid/sbom-arm64",
+          "provenance": "oci://example.invalid/provenance-arm64",
+          "native_smoke": "passed"
+        }
+      },
+      "suggested_runtime_egress": ["github.com", "static.rust-lang.org"]
+    }
+  ]
+}

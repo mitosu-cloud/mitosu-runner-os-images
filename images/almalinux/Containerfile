@@ -1,0 +1,79 @@
+# syntax=docker/dockerfile:1
+ARG BASE_IMAGE
+ARG RUNNER_IMAGE
+
+FROM ${RUNNER_IMAGE} AS runner
+FROM ${BASE_IMAGE} AS common
+
+ARG BASE_IMAGE
+ARG COMMON_PACKAGES
+ARG EPEL_RELEASE_PACKAGE
+ARG EPEL_PACKAGES
+ARG IMAGE_ID
+ARG TARGET_ARCH
+ARG RUNNER_SOURCE_DIGEST
+ARG SOURCE_REVISION
+ARG SOURCE_DATE_EPOCH
+ARG LOCK_DIGEST
+ARG CREATED
+
+ENV TZ=Etc/UTC
+
+RUN rm -f /etc/yum.repos.d/*.repo
+COPY images/common/create-tool-user.sh /usr/local/libexec/mitosu-create-tool-user
+COPY images/almalinux/almalinux.repo /etc/yum.repos.d/almalinux-locked.repo
+RUN dnf --assumeyes --setopt=install_weak_deps=False install "$EPEL_RELEASE_PACKAGE" \
+    && rm -f /etc/yum.repos.d/epel*.repo
+COPY images/almalinux/epel.repo /etc/yum.repos.d/epel-locked.repo
+RUN dnf --assumeyes --setopt=install_weak_deps=False install \
+       $COMMON_PACKAGES $EPEL_PACKAGES \
+    && update-ca-trust \
+    && ln -snf /usr/share/zoneinfo/Etc/UTC /etc/localtime \
+    && printf 'Etc/UTC\n' > /etc/timezone \
+    && /usr/local/libexec/mitosu-create-tool-user \
+    && rm -f /usr/local/libexec/mitosu-create-tool-user \
+    && install -d -m 0755 /workspace /usr/share/mitosu \
+    && install -d -m 0750 -o 1000 -g 1000 \
+       /var/lib/mitosu/apps /var/cache/mitosu \
+    && rpm -qa --qf '%{NAME}\t%{EPOCHNUM}:%{VERSION}-%{RELEASE}.%{ARCH}\n' \
+       > /tmp/packages.unsorted \
+    && LC_ALL=C sort /tmp/packages.unsorted > /usr/share/mitosu/packages.txt \
+    && dnf clean all \
+    && rm -rf /var/cache/dnf /var/log/dnf* /tmp/* \
+    && rm -f /etc/machine-id /var/lib/dbus/machine-id
+
+ENV LANG=en_US.UTF-8 \
+    LC_ALL=en_US.UTF-8
+
+COPY --from=runner /usr/local/bin/mitosurunner /usr/local/bin/mitosurunner
+COPY images/common/write-marker.sh /usr/local/libexec/mitosu-write-marker
+RUN IMAGE_ID="$IMAGE_ID" \
+    DISTRIBUTION=almalinux \
+    DISTRIBUTION_VERSION=10 \
+    TARGET_ARCH="$TARGET_ARCH" \
+    DEVELOPMENT_PROFILE=common \
+    PROFILE_REVISION=1 \
+    RUNNER_SOURCE_DIGEST="$RUNNER_SOURCE_DIGEST" \
+    SOURCE_REVISION="$SOURCE_REVISION" \
+    LOCK_DIGEST="$LOCK_DIGEST" \
+    CAPABILITIES_JSON='["shell","git"]' \
+    TOOLCHAINS_JSON='{"baseline":"1"}' \
+    /usr/local/libexec/mitosu-write-marker \
+    && rm -f /usr/local/libexec/mitosu-write-marker \
+    && test -x /usr/local/bin/mitosurunner
+
+COPY images/common/resolv.conf /etc/resolv.conf
+
+LABEL org.opencontainers.image.title="${IMAGE_ID}" \
+      org.opencontainers.image.description="Mitosu AlmaLinux 10 development image baseline" \
+      org.opencontainers.image.created="${CREATED}" \
+      org.opencontainers.image.source="https://github.com/mitosu-cloud/mitosu-runner-os-images" \
+      org.opencontainers.image.revision="${SOURCE_REVISION}" \
+      org.opencontainers.image.licenses="Apache-2.0" \
+      dev.mitosu.image.id="${IMAGE_ID}" \
+      dev.mitosu.profile.revision="1" \
+      dev.mitosu.base.digest="${BASE_IMAGE}" \
+      dev.mitosu.runner.digest="${RUNNER_SOURCE_DIGEST}" \
+      dev.mitosu.lock.digest="${LOCK_DIGEST}"
+
+ENTRYPOINT ["/usr/local/bin/mitosurunner"]

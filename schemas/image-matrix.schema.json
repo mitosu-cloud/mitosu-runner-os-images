@@ -1,0 +1,130 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://mitosu.dev/schemas/runner-os-image-matrix-v1.json",
+  "title": "Mitosu runner OS image matrix",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "runner_lock",
+    "architectures",
+    "distributions",
+    "profiles",
+    "images"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "runner_lock": {
+      "type": "string",
+      "pattern": "^locks/runner\\.json$"
+    },
+    "architectures": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "enum": ["amd64", "arm64"] }
+    },
+    "distributions": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/definitions/distribution" }
+    },
+    "profiles": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/definitions/profile" }
+    },
+    "images": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/definitions/image" }
+    }
+  },
+  "definitions": {
+    "relativeLockPath": {
+      "type": "string",
+      "pattern": "^locks/(os|toolchains)/[a-z0-9][a-z0-9._-]*\\.json$"
+    },
+    "distribution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "family", "version", "containerfile", "os_lock"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]*-[0-9]+(\\.[0-9]+)*$"
+        },
+        "family": { "enum": ["ubuntu", "almalinux"] },
+        "version": {
+          "type": "string",
+          "pattern": "^[0-9]+(\\.[0-9]+)*$"
+        },
+        "containerfile": {
+          "type": "string",
+          "pattern": "^images/(ubuntu|almalinux)/Containerfile$"
+        },
+        "os_lock": { "$ref": "#/definitions/relativeLockPath" }
+      }
+    },
+    "profile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "revision",
+        "capabilities",
+        "toolchain_lock",
+        "suggested_runtime_egress"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]*$"
+        },
+        "revision": { "type": "integer", "minimum": 1 },
+        "capabilities": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]*$"
+          }
+        },
+        "toolchain_lock": {
+          "oneOf": [
+            { "$ref": "#/definitions/relativeLockPath" },
+            { "type": "null" }
+          ]
+        },
+        "suggested_runtime_egress": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9*](?:[a-z0-9.*-]*[a-z0-9])?$"
+          }
+        }
+      }
+    },
+    "image": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "distribution", "profile"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9.-]*-[a-z][a-z0-9-]*$"
+        },
+        "distribution": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]*-[0-9]+(\\.[0-9]+)*$"
+        },
+        "profile": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]*$"
+        }
+      }
+    }
+  }
+}

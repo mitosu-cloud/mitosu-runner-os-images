@@ -1,0 +1,62 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://mitosu.dev/schemas/runner-toolchain-lock-v1.json",
+  "title": "Mitosu development toolchain input lock",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "profile",
+    "status",
+    "versions",
+    "artifacts",
+    "distribution_packages"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "profile": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*$"
+    },
+    "status": { "enum": ["pending", "locked"] },
+    "versions": {
+      "type": "object",
+      "propertyNames": { "pattern": "^[a-z][a-z0-9._-]*$" },
+      "additionalProperties": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "architecture", "url", "sha256"],
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "architecture": { "enum": ["amd64", "arm64"] },
+          "url": { "type": "string", "pattern": "^https://" },
+          "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+        }
+      }
+    },
+    "distribution_packages": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ubuntu", "almalinux"],
+      "properties": {
+        "ubuntu": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "almalinux": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    }
+  }
+}

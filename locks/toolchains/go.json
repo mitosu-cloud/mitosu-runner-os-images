@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "profile": "go",
+  "status": "pending",
+  "versions": {},
+  "artifacts": [],
+  "distribution_packages": {
+    "ubuntu": ["gcc", "g++", "libc6-dev", "pkg-config"],
+    "almalinux": ["gcc", "gcc-c++", "glibc-devel", "pkgconf-pkg-config"]
+  }
+}

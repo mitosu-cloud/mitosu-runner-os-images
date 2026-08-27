@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "profile": "cpp",
+  "status": "pending",
+  "versions": {},
+  "artifacts": [],
+  "distribution_packages": {
+    "ubuntu": [
+      "build-essential",
+      "gcc",
+      "g++",
+      "clang",
+      "make",
+      "cmake",
+      "ninja-build",
+      "pkg-config",
+      "binutils",
+      "gdb",
+      "lldb",
+      "libc6-dev",
+      "libssl-dev"
+    ],
+    "almalinux": [
+      "gcc",
+      "gcc-c++",
+      "clang",
+      "make",
+      "cmake",
+      "ninja-build",
+      "pkgconf-pkg-config",
+      "binutils",
+      "gdb",
+      "lldb",
+      "glibc-devel",
+      "openssl-devel"
+    ]
+  }
+}

@@ -1,0 +1,97 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://mitosu.dev/schemas/runner-os-image-set-v1.json",
+  "title": "Mitosu runner OS image release set",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "source_repository",
+    "source_revision",
+    "created",
+    "runner_source_digest",
+    "images"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "source_repository": { "type": "string", "pattern": "^https://" },
+    "source_revision": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{40,64}$"
+    },
+    "created": { "type": "string", "format": "date-time" },
+    "runner_source_digest": {
+      "type": "string",
+      "pattern": "^[a-z0-9._/-]+@sha256:[a-f0-9]{64}$"
+    },
+    "images": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/definitions/image" }
+    }
+  },
+  "definitions": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "artifactReference": {
+      "type": "string",
+      "minLength": 1
+    },
+    "architecture": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "manifest_digest",
+        "marker_digest",
+        "sbom",
+        "provenance",
+        "native_smoke"
+      ],
+      "properties": {
+        "manifest_digest": { "$ref": "#/definitions/digest" },
+        "marker_digest": { "$ref": "#/definitions/digest" },
+        "sbom": { "$ref": "#/definitions/artifactReference" },
+        "provenance": { "$ref": "#/definitions/artifactReference" },
+        "native_smoke": { "const": "passed" }
+      }
+    },
+    "image": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "image_id",
+        "profile_revision",
+        "index_digest",
+        "architectures",
+        "suggested_runtime_egress"
+      ],
+      "properties": {
+        "image_id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9.-]*-[a-z][a-z0-9-]*$"
+        },
+        "profile_revision": { "type": "integer", "minimum": 1 },
+        "index_digest": { "$ref": "#/definitions/digest" },
+        "architectures": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["amd64", "arm64"],
+          "properties": {
+            "amd64": { "$ref": "#/definitions/architecture" },
+            "arm64": { "$ref": "#/definitions/architecture" }
+          }
+        },
+        "suggested_runtime_egress": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9*](?:[a-z0-9.*-]*[a-z0-9])?$"
+          }
+        }
+      }
+    }
+  }
+}
