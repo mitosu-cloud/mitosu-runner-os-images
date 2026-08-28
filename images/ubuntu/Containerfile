@@ -29,7 +29,6 @@ RUN test -n "$UBUNTU_SNAPSHOT" \
     && apt-get -o Acquire::https::Verify-Peer=false install \
        --assume-yes --no-install-recommends $COMMON_PACKAGES \
     && update-ca-certificates \
-    && locale-gen en_US.UTF-8 \
     && ln -snf /usr/share/zoneinfo/Etc/UTC /etc/localtime \
     && printf 'Etc/UTC\n' > /etc/timezone \
     && /usr/local/libexec/mitosu-create-tool-user \
@@ -43,8 +42,8 @@ RUN test -n "$UBUNTU_SNAPSHOT" \
     && rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/* /tmp/* \
     && rm -f /etc/machine-id /var/lib/dbus/machine-id
 
-ENV LANG=en_US.UTF-8 \
-    LC_ALL=en_US.UTF-8
+ENV LANG=C.UTF-8 \
+    LC_ALL=C.UTF-8
 
 COPY --from=runner /usr/local/bin/mitosurunner /usr/local/bin/mitosurunner
 COPY images/common/write-marker.sh /usr/local/libexec/mitosu-write-marker
