@@ -219,33 +219,33 @@ cleanup() {
 }
 trap cleanup EXIT
 
-auth_response="$staging/github-auth-response.txt"
-gh api --include user >"$auth_response"
-oauth_scopes=$(awk '
-  BEGIN { IGNORECASE = 1 }
-  /^x-oauth-scopes:/ {
-    sub(/^[^:]+:[[:space:]]*/, "")
-    gsub(/\r/, "")
-    print
-    exit
-  }
-' "$auth_response")
-normalized_scopes=${oauth_scopes//[[:space:]]/}
-case ",$normalized_scopes," in
-  *,write:packages,*) ;;
-  *)
-    if [[ ${GITHUB_ACTIONS:-} == true \
-        && -n ${GITHUB_TOKEN:-${GH_TOKEN:-}} \
-        && ${GITHUB_REPOSITORY_OWNER:-} == "$namespace" ]]; then
-      # GitHub installation tokens do not advertise OAuth scopes. The
-      # protected publication workflow grants packages:write explicitly, and
-      # the registry still enforces that permission when the push begins.
-      :
-    else
+if [[ ${GITHUB_ACTIONS:-} == true \
+    && -n ${GITHUB_TOKEN:-${GH_TOKEN:-}} \
+    && ${GITHUB_REPOSITORY_OWNER:-} == "$namespace" ]]; then
+  # GitHub installation tokens do not advertise OAuth scopes and need not
+  # support the user endpoint. The protected workflow grants packages:write
+  # explicitly, and the registry still enforces that permission at push time.
+  :
+else
+  auth_response="$staging/github-auth-response.txt"
+  gh api --include user >"$auth_response"
+  oauth_scopes=$(awk '
+    BEGIN { IGNORECASE = 1 }
+    /^x-oauth-scopes:/ {
+      sub(/^[^:]+:[[:space:]]*/, "")
+      gsub(/\r/, "")
+      print
+      exit
+    }
+  ' "$auth_response")
+  normalized_scopes=${oauth_scopes//[[:space:]]/}
+  case ",$normalized_scopes," in
+    *,write:packages,*) ;;
+    *)
       die 'active gh credential lacks write:packages; use a classic PAT with GHCR write access and authorize organization SSO if required'
-    fi
-    ;;
-esac
+      ;;
+  esac
+fi
 
 existing_tags="$staging/existing-tags.txt"
 package_error="$staging/package-error.txt"
