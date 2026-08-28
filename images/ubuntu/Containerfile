@@ -21,6 +21,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
 
 COPY images/ubuntu/ubuntu.sources.in /tmp/ubuntu.sources.in
 COPY images/common/create-tool-user.sh /usr/local/libexec/mitosu-create-tool-user
+# Installing ca-certificates refreshes the trust store through its package trigger.
 RUN test -n "$UBUNTU_SNAPSHOT" \
     && sed "s/@SNAPSHOT@/$UBUNTU_SNAPSHOT/g" /tmp/ubuntu.sources.in \
        > /etc/apt/sources.list.d/ubuntu.sources \
@@ -28,7 +29,6 @@ RUN test -n "$UBUNTU_SNAPSHOT" \
     && apt-get -o Acquire::https::Verify-Peer=false update \
     && apt-get -o Acquire::https::Verify-Peer=false install \
        --assume-yes --no-install-recommends $COMMON_PACKAGES \
-    && update-ca-certificates \
     && ln -snf /usr/share/zoneinfo/Etc/UTC /etc/localtime \
     && printf 'Etc/UTC\n' > /etc/timezone \
     && /usr/local/libexec/mitosu-create-tool-user \
