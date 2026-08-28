@@ -11,6 +11,25 @@ on:
         description: Immutable release tag component, for example v0.1.1-e2e1
         required: true
         type: string
+      distribution:
+        description: Locked runner OS distribution to publish
+        required: true
+        type: choice
+        options:
+          - ubuntu-26.04
+          - almalinux-10
+      architecture:
+        description: Target OCI architecture
+        required: true
+        type: choice
+        options:
+          - amd64
+          - arm64
+      allow_emulated:
+        description: Allow a non-native architecture build and smoke test
+        required: true
+        default: false
+        type: boolean
 
 concurrency:
   group: self-hosted-runner-os-publish
@@ -30,11 +49,20 @@ jobs:
     steps:
       - name: Validate immutable inputs
         env:
+          ALLOW_EMULATED: ${{ inputs.allow_emulated }}
+          ARCHITECTURE: ${{ inputs.architecture }}
+          DISTRIBUTION: ${{ inputs.distribution }}
           SOURCE_SHA: ${{ inputs.source_sha }}
           RELEASE_TAG: ${{ inputs.release_tag }}
         run: |
           [[ "$SOURCE_SHA" =~ ^[a-f0-9]{40}$ ]]
           [[ "$RELEASE_TAG" =~ ^[a-z0-9][a-z0-9._-]{0,63}$ ]]
+          [[ "$DISTRIBUTION" == ubuntu-26.04 || "$DISTRIBUTION" == almalinux-10 ]]
+          [[ "$ARCHITECTURE" == amd64 || "$ARCHITECTURE" == arm64 ]]
+          [[ "$ALLOW_EMULATED" == true || "$ALLOW_EMULATED" == false ]]
+          if [[ "$ARCHITECTURE" == arm64 ]]; then
+            [[ "$ALLOW_EMULATED" == true ]]
+          fi
 
       - name: Check out exact source revision
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -44,44 +72,61 @@ jobs:
 
       - name: Verify source and pre-provisioned worker tools
         env:
+          ARCHITECTURE: ${{ inputs.architecture }}
           SOURCE_SHA: ${{ inputs.source_sha }}
         run: |
           test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
           for tool in curl gh git jq jsonschema podman realpath; do
             command -v "$tool"
           done
-          test -r /proc/sys/fs/binfmt_misc/qemu-aarch64
-          grep -qx enabled /proc/sys/fs/binfmt_misc/qemu-aarch64
-          grep -Eq '^flags:.*F' /proc/sys/fs/binfmt_misc/qemu-aarch64
+          if [[ "$ARCHITECTURE" == arm64 ]]; then
+            test -r /proc/sys/fs/binfmt_misc/qemu-aarch64
+            grep -qx enabled /proc/sys/fs/binfmt_misc/qemu-aarch64
+            grep -Eq '^flags:.*F' /proc/sys/fs/binfmt_misc/qemu-aarch64
+          fi
 
       - name: Validate repository contract
         run: make test
 
-      - name: Publish verified amd64 and arm64 common images
+      - name: Publish verified common image
         env:
+          ALLOW_EMULATED: ${{ inputs.allow_emulated }}
+          ARCHITECTURE: ${{ inputs.architecture }}
+          DISTRIBUTION: ${{ inputs.distribution }}
           RELEASE_TAG: ${{ inputs.release_tag }}
         run: |
+          args=(
+            --tag "$RELEASE_TAG"
+            --distribution "$DISTRIBUTION"
+            --architecture "$ARCHITECTURE"
+          )
+          if [[ "$ALLOW_EMULATED" == true ]]; then
+            args+=(--allow-emulated)
+          fi
           ./scripts/build-and-push-images.sh \
-            --tag "$RELEASE_TAG" \
-            --architecture amd64 \
-            --architecture arm64 \
-            --allow-emulated
+            "${args[@]}"
 
       - name: Locate and summarize immutable release report
         id: report
         env:
+          ARCHITECTURE: ${{ inputs.architecture }}
           SOURCE_SHA: ${{ inputs.source_sha }}
           RELEASE_TAG: ${{ inputs.release_tag }}
         run: |
           report="$MITOSU_BUILD_ROOT/releases/$RELEASE_TAG-${SOURCE_SHA:0:12}/push-report.json"
           test -f "$report"
-          jq -e '
-            .images | length == 2
-            and all(.[]; (.index_digest | test("^sha256:[a-f0-9]{64}$")))
+          jq -e --arg architecture "$ARCHITECTURE" '
+            (.images | length == 1)
+            and (
+              .images[0].architectures[$architecture].manifest_digest
+              | test("^sha256:[a-f0-9]{64}$")
+            )
           ' "$report"
           {
             printf '### Published runner OS images\n\n'
-            jq -r '.images[] | "- `\(.image_id)`: `\(.index_reference)`"' "$report"
+            jq -r --arg architecture "$ARCHITECTURE" \
+              '.images[] | "- `\(.image_id)` (`\($architecture)`): `\(.architectures[$architecture].reference)`"' \
+              "$report"
           } >> "$GITHUB_STEP_SUMMARY"
           printf 'path=%s\n' "$report" >> "$GITHUB_OUTPUT"
 

@@ -22,6 +22,7 @@ test "$(id -u)" = 1000
 test "$(id -g)" = 1000
 test "$(id -un)" = mitosu
 test "$HOME" = /home/mitosu
+test "$(locale charmap)" = UTF-8
 
 for command_name in bash git ssh curl tar gzip bzip2 xz unzip file find patch diff jq rg ps ip ping lsof; do
   command -v "$command_name" >/dev/null
