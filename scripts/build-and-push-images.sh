@@ -14,6 +14,7 @@ release_tag=
 allow_emulated=false
 dry_run=false
 architectures=()
+requested_distributions=()
 
 usage() {
   cat <<'EOF'
@@ -26,6 +27,8 @@ defaults to /tmp/mitosu-runner-os-images and must resolve beneath /tmp.
 Options:
   --tag TAG                  Release tag component, such as v0.1.0
   --repository REPOSITORY    Destination (default: ghcr.io/mitosu-cloud/runner-os)
+  --distribution ID          Build one locked distribution; repeat as needed
+                             (default: every distribution)
   --architecture ARCH        Build amd64 or arm64; repeat to build both
                              (default: native host architecture)
   --allow-emulated           Permit a non-native architecture build and smoke
@@ -56,6 +59,11 @@ while (($# > 0)); do
     --repository)
       (($# >= 2)) || die '--repository requires a value'
       repository=$2
+      shift 2
+      ;;
+    --distribution)
+      (($# >= 2)) || die '--distribution requires a value'
+      requested_distributions+=("$2")
       shift 2
       ;;
     --architecture)
@@ -139,8 +147,23 @@ require_emulation_handler() {
 source_revision=$(git -C "$REPOSITORY_ROOT" rev-parse HEAD)
 source_short=${source_revision:0:12}
 matrix="$REPOSITORY_ROOT/locks/image-matrix.json"
-mapfile -t distributions < <(jq -r '.distributions[].id' "$matrix")
-(( ${#distributions[@]} > 0 )) || die 'the image matrix contains no distributions'
+mapfile -t available_distributions < <(jq -r '.distributions[].id' "$matrix")
+(( ${#available_distributions[@]} > 0 )) || die 'the image matrix contains no distributions'
+
+if ((${#requested_distributions[@]} == 0)); then
+  distributions=("${available_distributions[@]}")
+else
+  distributions=()
+  declare -A selected_distributions=()
+  for distribution in "${requested_distributions[@]}"; do
+    jq -e --arg id "$distribution" '.distributions[] | select(.id == $id)' \
+      "$matrix" >/dev/null || die "unknown distribution: $distribution"
+    [[ -z ${selected_distributions[$distribution]+present} ]] ||
+      die "duplicate distribution: $distribution"
+    selected_distributions[$distribution]=present
+    distributions+=("$distribution")
+  done
+fi
 
 build_root=$(ensure_build_root)
 release_directory="$build_root/releases/$release_tag-$source_short"
