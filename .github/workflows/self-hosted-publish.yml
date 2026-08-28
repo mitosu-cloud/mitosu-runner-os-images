@@ -1,0 +1,94 @@
+name: Self-hosted runner OS publication
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: Exact 40-character runner-OS source revision to publish
+        required: true
+        type: string
+      release_tag:
+        description: Immutable release tag component, for example v0.1.1-e2e1
+        required: true
+        type: string
+
+concurrency:
+  group: self-hosted-runner-os-publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 120
+    permissions:
+      contents: read
+      packages: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      MITOSU_BUILD_ROOT: /tmp/mitosu-runner-os-images
+      MITOSU_REGISTRY_USER: ${{ github.actor }}
+    steps:
+      - name: Validate immutable inputs
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          [[ "$SOURCE_SHA" =~ ^[a-f0-9]{40}$ ]]
+          [[ "$RELEASE_TAG" =~ ^[a-z0-9][a-z0-9._-]{0,63}$ ]]
+
+      - name: Check out exact source revision
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.source_sha }}
+          persist-credentials: false
+
+      - name: Verify source and pre-provisioned worker tools
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          for tool in curl gh git jq jsonschema podman realpath; do
+            command -v "$tool"
+          done
+          test -r /proc/sys/fs/binfmt_misc/qemu-aarch64
+          grep -qx enabled /proc/sys/fs/binfmt_misc/qemu-aarch64
+          grep -Eq '^flags:.*F' /proc/sys/fs/binfmt_misc/qemu-aarch64
+
+      - name: Validate repository contract
+        run: make test
+
+      - name: Publish verified amd64 and arm64 common images
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          ./scripts/build-and-push-images.sh \
+            --tag "$RELEASE_TAG" \
+            --architecture amd64 \
+            --architecture arm64 \
+            --allow-emulated
+
+      - name: Locate and summarize immutable release report
+        id: report
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          report="$MITOSU_BUILD_ROOT/releases/$RELEASE_TAG-${SOURCE_SHA:0:12}/push-report.json"
+          test -f "$report"
+          jq -e '
+            .images | length == 2
+            and all(.[]; (.index_digest | test("^sha256:[a-f0-9]{64}$")))
+          ' "$report"
+          {
+            printf '### Published runner OS images\n\n'
+            jq -r '.images[] | "- `\(.image_id)`: `\(.index_reference)`"' "$report"
+          } >> "$GITHUB_STEP_SUMMARY"
+          printf 'path=%s\n' "$report" >> "$GITHUB_OUTPUT"
+
+      - name: Upload immutable release report
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: runner-os-${{ inputs.release_tag }}-release-report
+          path: ${{ steps.report.outputs.path }}
+          if-no-files-found: error
+          retention-days: 30

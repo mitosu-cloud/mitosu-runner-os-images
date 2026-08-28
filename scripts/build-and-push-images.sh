@@ -183,7 +183,10 @@ require_command gh
 require_command podman
 gh auth status --hostname github.com >/dev/null 2>&1 ||
   die 'GitHub CLI is not authenticated; run gh auth login --hostname github.com'
-registry_user=$(gh api user --jq .login)
+registry_user=${MITOSU_REGISTRY_USER:-}
+if [[ -z $registry_user ]]; then
+  registry_user=$(gh api user --jq .login)
+fi
 [[ -n $registry_user ]] || die 'could not resolve the authenticated GitHub user'
 
 registry=${repository%%/*}
@@ -216,24 +219,33 @@ cleanup() {
 }
 trap cleanup EXIT
 
-auth_response="$staging/github-auth-response.txt"
-gh api --include user >"$auth_response"
-oauth_scopes=$(awk '
-  BEGIN { IGNORECASE = 1 }
-  /^x-oauth-scopes:/ {
-    sub(/^[^:]+:[[:space:]]*/, "")
-    gsub(/\r/, "")
-    print
-    exit
-  }
-' "$auth_response")
-normalized_scopes=${oauth_scopes//[[:space:]]/}
-case ",$normalized_scopes," in
-  *,write:packages,*) ;;
-  *)
-    die 'active gh credential lacks write:packages; use a classic PAT with GHCR write access and authorize organization SSO if required'
-    ;;
-esac
+if [[ ${GITHUB_ACTIONS:-} == true \
+    && -n ${GITHUB_TOKEN:-${GH_TOKEN:-}} \
+    && ${GITHUB_REPOSITORY_OWNER:-} == "$namespace" ]]; then
+  # GitHub installation tokens do not advertise OAuth scopes and need not
+  # support the user endpoint. The protected workflow grants packages:write
+  # explicitly, and the registry still enforces that permission at push time.
+  :
+else
+  auth_response="$staging/github-auth-response.txt"
+  gh api --include user >"$auth_response"
+  oauth_scopes=$(awk '
+    BEGIN { IGNORECASE = 1 }
+    /^x-oauth-scopes:/ {
+      sub(/^[^:]+:[[:space:]]*/, "")
+      gsub(/\r/, "")
+      print
+      exit
+    }
+  ' "$auth_response")
+  normalized_scopes=${oauth_scopes//[[:space:]]/}
+  case ",$normalized_scopes," in
+    *,write:packages,*) ;;
+    *)
+      die 'active gh credential lacks write:packages; use a classic PAT with GHCR write access and authorize organization SSO if required'
+      ;;
+  esac
+fi
 
 existing_tags="$staging/existing-tags.txt"
 package_error="$staging/package-error.txt"
