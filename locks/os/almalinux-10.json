@@ -20,11 +20,11 @@
       "metadata": {
         "amd64": {
           "url": "https://repo.almalinux.org/almalinux/10.2/BaseOS/x86_64/os/repodata/repomd.xml",
-          "sha256": "f0ddd471353e16afea737988159e0e315678f4725f6c037489fd85956acee308"
+          "sha256": "f9684bdb57189b224b9724f8eaf9c00dfeae7f6d9d8079b7160837297b3f575c"
         },
         "arm64": {
           "url": "https://repo.almalinux.org/almalinux/10.2/BaseOS/aarch64/os/repodata/repomd.xml",
-          "sha256": "a27ccab0bc83a57bb1c05f476042730ad18fe8919173f0b529372ae410303c9d"
+          "sha256": "2f33ce89fbe5e1f21425c22f20a17ad5a20fedaa9b225aaaca5799e232b1621e"
         }
       }
     },
@@ -34,11 +34,11 @@
       "metadata": {
         "amd64": {
           "url": "https://repo.almalinux.org/almalinux/10.2/AppStream/x86_64/os/repodata/repomd.xml",
-          "sha256": "c1c2ab25a9e9f15ebf7e81cb4b085ecb3c5f485ad91db6eaf3ba6d7202004abc"
+          "sha256": "e6b614ee962dd24eaf1a421af14388fe86a31d47af6a451eaa3806fa9cb44038"
         },
         "arm64": {
           "url": "https://repo.almalinux.org/almalinux/10.2/AppStream/aarch64/os/repodata/repomd.xml",
-          "sha256": "03cfe9f00b903ede551475cc380f1bd697891dc7eecda33148e9410a6ce79f6b"
+          "sha256": "39bb7773923839ad6c7a1cedafe2c5c3ab689efc9ee9e5fcba82297352d1167b"
         }
       }
     },
@@ -48,11 +48,11 @@
       "metadata": {
         "amd64": {
           "url": "https://repo.almalinux.org/almalinux/10.2/CRB/x86_64/os/repodata/repomd.xml",
-          "sha256": "4b6b71a5b4b7cb27bc6186cae66209942b47bb66c2e64ff6381173b759fdb4bb"
+          "sha256": "b5ab5f320c730a556ae804e0bde2e427d3987ff09aeafc7753193303af6b1de0"
         },
         "arm64": {
           "url": "https://repo.almalinux.org/almalinux/10.2/CRB/aarch64/os/repodata/repomd.xml",
-          "sha256": "044c05849b7a3e38a60f5871cd5504e3e47c90f3f21d50904cc2593541a5dab6"
+          "sha256": "669161f48aa5886bc445afd82e764190392c08acc68014f30ec28a2304f1f1d5"
         }
       }
     },
@@ -62,11 +62,11 @@
       "metadata": {
         "amd64": {
           "url": "https://repo.almalinux.org/almalinux/10.2/extras/x86_64/os/repodata/repomd.xml",
-          "sha256": "8dfd9fa0bfd51af7e666bd733b7205e3a43a07afd7b47f364722d0cfde091f1c"
+          "sha256": "38d224f923efa290763036002aabb1ae641e319d7e34ad832bd8b86a462ac8b4"
         },
         "arm64": {
           "url": "https://repo.almalinux.org/almalinux/10.2/extras/aarch64/os/repodata/repomd.xml",
-          "sha256": "737f2be77caacf3d787e62d69a15a84cabc60aa3b82bee328ffcfe05dcf94702"
+          "sha256": "bd602a140cf8dede82ed40e35915f0c1d972bf24a012cb3ba38a64ff823efd52"
         }
       }
     },
@@ -76,11 +76,11 @@
       "metadata": {
         "amd64": {
           "url": "https://dl.fedoraproject.org/pub/epel/10/Everything/x86_64/repodata/repomd.xml",
-          "sha256": "d56bbe313e7a319f45882a14301daab94f7e1f7afb2f8055cb7eaad7baa57a94"
+          "sha256": "9842d41c0b1edc4948e7f2560b8b39ca9b9c7dadb154abb921bccf0c4b65b147"
         },
         "arm64": {
           "url": "https://dl.fedoraproject.org/pub/epel/10/Everything/aarch64/repodata/repomd.xml",
-          "sha256": "89069e0ea149d09262c6e3b25ca6e10ec58bf06a74078da48eb53f6774bce53d"
+          "sha256": "2321898f18669314303eab466b6074f33287bd23baa2bb112e62d394bc176850"
         }
       }
     }
