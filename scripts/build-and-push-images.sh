@@ -358,7 +358,15 @@ for distribution in "${distributions[@]}"; do
       && -n ${selected_architectures[arm64]+present} ]]; then
     index_tag="$image_id-$release_tag"
     local_index="localhost/mitosu/$image_id:index-$release_tag-$source_short"
-    run_podman manifest create "$local_index" "${local_references[@]}" >/dev/null
+    run_podman manifest create "$local_index" >/dev/null
+    for local_reference in "${local_references[@]}"; do
+      # Podman otherwise treats a localhost-prefixed name as a remote registry
+      # source on some releases. Both images were built and verified in this
+      # command's isolated graph root, so make that trust boundary explicit.
+      run_podman manifest add \
+        "$local_index" \
+        "containers-storage:$local_reference" >/dev/null
+    done
     index_digest_file="$staging/$image_id-index.digest"
     printf 'pushing OCI index %s:%s\n' "$repository" "$index_tag" >&2
     run_podman manifest push \
