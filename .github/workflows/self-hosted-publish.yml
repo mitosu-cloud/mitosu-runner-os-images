@@ -19,12 +19,13 @@ on:
           - ubuntu-26.04
           - almalinux-10
       architecture:
-        description: Target OCI architecture
+        description: Target OCI architecture, or both for a multi-platform index
         required: true
         type: choice
         options:
           - amd64
           - arm64
+          - both
       allow_emulated:
         description: Allow a non-native architecture build and smoke test
         required: true
@@ -58,9 +59,9 @@ jobs:
           [[ "$SOURCE_SHA" =~ ^[a-f0-9]{40}$ ]]
           [[ "$RELEASE_TAG" =~ ^[a-z0-9][a-z0-9._-]{0,63}$ ]]
           [[ "$DISTRIBUTION" == ubuntu-26.04 || "$DISTRIBUTION" == almalinux-10 ]]
-          [[ "$ARCHITECTURE" == amd64 || "$ARCHITECTURE" == arm64 ]]
+          [[ "$ARCHITECTURE" == amd64 || "$ARCHITECTURE" == arm64 || "$ARCHITECTURE" == both ]]
           [[ "$ALLOW_EMULATED" == true || "$ALLOW_EMULATED" == false ]]
-          if [[ "$ARCHITECTURE" == arm64 ]]; then
+          if [[ "$ARCHITECTURE" == arm64 || "$ARCHITECTURE" == both ]]; then
             [[ "$ALLOW_EMULATED" == true ]]
           fi
 
@@ -79,7 +80,7 @@ jobs:
           for tool in curl gh git jq jsonschema podman realpath; do
             command -v "$tool"
           done
-          if [[ "$ARCHITECTURE" == arm64 ]]; then
+          if [[ "$ARCHITECTURE" == arm64 || "$ARCHITECTURE" == both ]]; then
             test -r /proc/sys/fs/binfmt_misc/qemu-aarch64
             grep -qx enabled /proc/sys/fs/binfmt_misc/qemu-aarch64
             grep -Eq '^flags:.*F' /proc/sys/fs/binfmt_misc/qemu-aarch64
@@ -98,8 +99,12 @@ jobs:
           args=(
             --tag "$RELEASE_TAG"
             --distribution "$DISTRIBUTION"
-            --architecture "$ARCHITECTURE"
           )
+          if [[ "$ARCHITECTURE" == both ]]; then
+            args+=(--architecture amd64 --architecture arm64)
+          else
+            args+=(--architecture "$ARCHITECTURE")
+          fi
           if [[ "$ALLOW_EMULATED" == true ]]; then
             args+=(--allow-emulated)
           fi
@@ -117,15 +122,24 @@ jobs:
           test -f "$report"
           jq -e --arg architecture "$ARCHITECTURE" '
             (.images | length == 1)
-            and (
+            and if $architecture == "both" then
+              (.images[0].index_digest | test("^sha256:[a-f0-9]{64}$"))
+              and (.images[0].architectures.amd64.manifest_digest | test("^sha256:[a-f0-9]{64}$"))
+              and (.images[0].architectures.arm64.manifest_digest | test("^sha256:[a-f0-9]{64}$"))
+            else
               .images[0].architectures[$architecture].manifest_digest
               | test("^sha256:[a-f0-9]{64}$")
-            )
+            end
           ' "$report"
           {
             printf '### Published runner OS images\n\n'
             jq -r --arg architecture "$ARCHITECTURE" \
-              '.images[] | "- `\(.image_id)` (`\($architecture)`): `\(.architectures[$architecture].reference)`"' \
+              '.images[]
+              | if $architecture == "both" then
+                  "- `\(.image_id)` (multi-platform): `\(.index_reference)`"
+                else
+                  "- `\(.image_id)` (`\($architecture)`): `\(.architectures[$architecture].reference)`"
+                end' \
               "$report"
           } >> "$GITHUB_STEP_SUMMARY"
           printf 'path=%s\n' "$report" >> "$GITHUB_OUTPUT"
