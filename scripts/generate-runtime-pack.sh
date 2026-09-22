@@ -17,8 +17,14 @@ usage: generate-runtime-pack.sh \
   --initfs REPOSITORY@sha256:DIGEST \
   --tool-image REPOSITORY@sha256:DIGEST \
   [--image-set FILE] \
+  [--openshell-supervisor-image REPOSITORY@sha256:DIGEST] \
+  [--openshell-sandbox-runtime-image REPOSITORY@sha256:DIGEST] \
   [--target-os macos] \
   [--target-arch aarch64]
+
+Schema version 1 is the historical pack. Passing both OpenShell image
+references emits schema version 2, which requires those digest-pinned
+entries. The VM driver binary is not packed until it is built.
 
 The output directory must not exist and must be beneath MITOSU_BUILD_ROOT.
 EOF
@@ -31,6 +37,8 @@ runner=
 image_set=
 initfs=
 tool_image=
+openshell_supervisor=
+openshell_sandbox=
 target_os=macos
 target_arch=aarch64
 
@@ -69,6 +77,16 @@ while (($# > 0)); do
     --tool-image)
       (($# >= 2)) || die '--tool-image requires a value'
       tool_image=$2
+      shift 2
+      ;;
+    --openshell-supervisor-image)
+      (($# >= 2)) || die '--openshell-supervisor-image requires a value'
+      openshell_supervisor=$2
+      shift 2
+      ;;
+    --openshell-sandbox-runtime-image)
+      (($# >= 2)) || die '--openshell-sandbox-runtime-image requires a value'
+      openshell_sandbox=$2
       shift 2
       ;;
     --target-os)
@@ -174,24 +192,50 @@ if [[ -n $image_set ]]; then
   add_artifact image_set metadata/image-set.json false
 fi
 
+if [[ -n $openshell_supervisor || -n $openshell_sandbox ]]; then
+  [[ -n $openshell_supervisor && -n $openshell_sandbox ]] ||
+    die 'OpenShell runtime images must be supplied together'
+  [[ $openshell_supervisor =~ .+@sha256:[a-f0-9]{64}$ ]] ||
+    die 'OpenShell supervisor image must be repository@sha256:<64 hex>'
+  [[ $openshell_sandbox =~ .+@sha256:[a-f0-9]{64}$ ]] ||
+    die 'OpenShell sandbox runtime image must be repository@sha256:<64 hex>'
+  schema_version=2
+else
+  schema_version=1
+fi
+
 manifest_staging="$output/.manifest.json.tmp"
 jq -S -n \
   --arg pack_id "$pack_id" \
   --arg target_os "$target_os" \
   --arg target_arch "$target_arch" \
+  --argjson schema_version "$schema_version" \
   --argjson artifacts "$artifacts" \
   --arg initfs "$initfs" \
   --arg tool_image "$tool_image" \
+  --arg openshell_supervisor "$openshell_supervisor" \
+  --arg openshell_sandbox "$openshell_sandbox" \
   '{
-    schema_version: 1,
+    schema_version: $schema_version,
     pack_id: $pack_id,
     target_os: $target_os,
     target_arch: $target_arch,
     artifacts: $artifacts,
-    oci_images: [
-      {name: "initfs", reference: $initfs},
-      {name: "tool_image", reference: $tool_image}
-    ]
+    oci_images: (
+      [
+        {name: "initfs", reference: $initfs},
+        {name: "tool_image", reference: $tool_image}
+      ] + (
+        if $schema_version == 2 then
+          [
+            {name: "openshell_supervisor_image", reference: $openshell_supervisor},
+            {name: "openshell_sandbox_runtime_image", reference: $openshell_sandbox}
+          ]
+        else
+          []
+        end
+      )
+    )
   }' >"$manifest_staging"
 chmod 0444 -- "$manifest_staging"
 mv -- "$manifest_staging" "$output/manifest.json"

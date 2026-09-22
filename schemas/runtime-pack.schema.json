@@ -13,7 +13,7 @@
     "oci_images"
   ],
   "properties": {
-    "schema_version": { "const": 1 },
+    "schema_version": { "enum": [1, 2] },
     "pack_id": {
       "type": "string",
       "minLength": 1,
@@ -34,6 +34,40 @@
       "items": { "$ref": "#/definitions/ociImage" }
     }
   },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "schema_version": { "const": 2 } },
+        "required": ["schema_version"]
+      },
+      "then": {
+        "allOf": [
+          {
+            "properties": {
+              "oci_images": {
+                "contains": {
+                  "type": "object",
+                  "required": ["name"],
+                  "properties": { "name": { "const": "openshell_supervisor_image" } }
+                }
+              }
+            }
+          },
+          {
+            "properties": {
+              "oci_images": {
+                "contains": {
+                  "type": "object",
+                  "required": ["name"],
+                  "properties": { "name": { "const": "openshell_sandbox_runtime_image" } }
+                }
+              }
+            }
+          }
+        ]
+      }
+    }
+  ],
   "definitions": {
     "name": {
       "type": "string",

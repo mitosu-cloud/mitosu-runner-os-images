@@ -99,3 +99,27 @@ if "$REPOSITORY_ROOT/scripts/verify-runtime-pack.sh" \
   fail 'runtime pack verified with an unrelated public key'
 fi
 pass 'runtime pack verification rejects an unrelated Ed25519 key'
+
+openshell_pack="$staging/openshell-runtime-pack"
+supervisor_image="ghcr.io/nvidia/openshell/supervisor@sha256:$(printf 'a%.0s' {1..64})"
+sandbox_image="ghcr.io/nvidia/openshell/sandbox@sha256:$(printf 'b%.0s' {1..64})"
+"$REPOSITORY_ROOT/scripts/generate-runtime-pack.sh" \
+  --output "$openshell_pack" \
+  --pack-id openshell-linux-x86_64 \
+  --kernel "$staging/vmlinux" \
+  --runner "$staging/mitosurunner" \
+  --initfs "$initfs" \
+  --tool-image "$tool_image" \
+  --target-os linux \
+  --target-arch x86_64 \
+  --openshell-supervisor-image "$supervisor_image" \
+  --openshell-sandbox-runtime-image "$sandbox_image" >/dev/null
+[[ $(jq -r '.schema_version' "$openshell_pack/manifest.json") == 2 ]] ||
+  fail 'OpenShell runtime pack did not bump the schema version'
+[[ $(jq -r '.oci_images[] | select(.name == "openshell_supervisor_image") | .reference' \
+  "$openshell_pack/manifest.json") == "$supervisor_image" ]] ||
+  fail 'OpenShell supervisor image was not pinned'
+[[ $(jq -r '.oci_images[] | select(.name == "openshell_sandbox_runtime_image") | .reference' \
+  "$openshell_pack/manifest.json") == "$sandbox_image" ]] ||
+  fail 'OpenShell sandbox runtime image was not pinned'
+pass 'schema version 2 pins the OpenShell supervisor and sandbox runtime images'
