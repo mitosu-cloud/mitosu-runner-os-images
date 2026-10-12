@@ -40,8 +40,11 @@ jobs:
   publish:
     runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 120
+    environment: runtime-release
     permissions:
+      attestations: write
       contents: read
+      id-token: write
       packages: write
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -143,6 +146,42 @@ jobs:
               "$report"
           } >> "$GITHUB_STEP_SUMMARY"
           printf 'path=%s\n' "$report" >> "$GITHUB_OUTPUT"
+          printf 'subject_name=%s\n' "$(jq -er '.repository' "$report")" >> "$GITHUB_OUTPUT"
+          if [[ "$ARCHITECTURE" == both ]]; then
+            subject_digest=$(jq -er '.images[0].index_digest' "$report")
+          else
+            subject_digest=$(jq -er --arg architecture "$ARCHITECTURE" \
+              '.images[0].architectures[$architecture].manifest_digest' "$report")
+          fi
+          printf 'subject_digest=%s\n' "$subject_digest" >> "$GITHUB_OUTPUT"
+
+      - name: Attest published image provenance
+        id: provenance
+        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3.0.0
+        with:
+          subject-name: ${{ steps.report.outputs.subject_name }}
+          subject-digest: ${{ steps.report.outputs.subject_digest }}
+          push-to-registry: true
+
+      - name: Record provenance in immutable release report
+        env:
+          ATTESTATION_ID: ${{ steps.provenance.outputs.attestation-id }}
+          ATTESTATION_URL: ${{ steps.provenance.outputs.attestation-url }}
+          REPORT_PATH: ${{ steps.report.outputs.path }}
+        run: |
+          test -n "$ATTESTATION_ID"
+          test -n "$ATTESTATION_URL"
+          chmod u+w "$REPORT_PATH"
+          jq -S \
+            --arg id "$ATTESTATION_ID" \
+            --arg url "$ATTESTATION_URL" \
+            '.images[0].provenance = {
+              type: "github-build-provenance",
+              attestation_id: $id,
+              url: $url
+            }' "$REPORT_PATH" > "$REPORT_PATH.tmp"
+          mv "$REPORT_PATH.tmp" "$REPORT_PATH"
+          chmod 0444 "$REPORT_PATH"
 
       - name: Upload immutable release report
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

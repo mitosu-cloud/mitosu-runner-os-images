@@ -131,9 +131,23 @@ and temporary inspection data also remain beneath
 ## Signed runtime-pack handoff
 
 The repository can assemble and verify the exact runtime-pack format consumed
-by `mitosuagent`. A pack binds the selected kernel and runner bytes plus
-digest-pinned initfs and tool-image references. Generation and signing are
-separate so a build job never needs the protected release key:
+by `mitosuagent`. The general assembler accepts any declared runtime artifact,
+including `openshell_driver_vm`, and a JSON array of digest-pinned OCI images.
+Each ACP workload image may carry the signed marker attestation enforced by the
+agent. Generation and signing are separate so a build job never needs the
+protected release key:
+
+```sh
+make assemble-runtime-pack \
+  PACK_ID=openshell-2026.10-linux-x86_64 \
+  TARGET_OS=linux \
+  TARGET_ARCH=x86_64 \
+  OCI_IMAGES=/absolute/path/to/oci-images.json \
+  ARTIFACT_ARGS='--artifact openshell_driver_vm /absolute/path/to/openshell-driver-vm bin/openshell-driver-vm true'
+```
+
+The older Apple Containerization pack generator remains available for
+historical releases:
 
 ```sh
 make runtime-pack \
@@ -157,8 +171,14 @@ Signing writes `release-handoff.json`. That file supplies the three values a
 trusted `mitosuagent` configuration needs: the HTTPS source URL or absolute
 directory path, the SHA-256 of the exact `manifest.json` bytes, and the
 lowercase-hex 32-byte Ed25519 public key. The private key is never copied into
-the pack. See the [release policy](docs/release.md) for publication gates and
-key handling.
+the pack. The protected `runtime-pack-release.yml` workflow accepts a
+checksum-pinned unsigned archive rooted at `pack/`, validates the required VM
+driver and attested Ubuntu Node/Python images, verifies GitHub provenance for
+every OCI digest, signs with the protected environment key, checks the derived
+public key against the environment pin, attests the release files through
+GitHub OIDC, and publishes an immutable-tagged GitHub release. See the
+[release policy](docs/release.md) for environment setup, publication gates,
+and key handling.
 
 See [architecture](docs/architecture.md),
 [adding an image](docs/adding-an-image.md), and

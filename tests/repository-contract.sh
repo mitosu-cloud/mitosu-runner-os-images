@@ -47,6 +47,7 @@ validate_json_schema \
 pass 'marker and release-manifest fixtures validate'
 
 "$TEST_DIR/runtime-pack-contract.sh"
+"$TEST_DIR/protected-release-contract.sh"
 "$TEST_DIR/publish-script-contract.sh"
 "$TEST_DIR/build-root-contract.sh"
 
