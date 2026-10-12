@@ -60,16 +60,22 @@ installer-owned absolute directory.
 ## Protected release environment
 
 Create a GitHub environment named `runtime-release` in this public repository.
-Configure required reviewers, prevent self-review, and restrict deployment to
-the protected release branch. Enable immutable releases in the repository
+Configure required reviewers and restrict deployment to the protected release
+branch. The current single-maintainer environment requires `edhemphill` and
+allows self-review; after a second trusted reviewer or team is added, prevent
+self-review to obtain a two-person release gate. Enable immutable releases in the repository
 settings so published tags and assets cannot be changed or deleted. The
-workflow checks that setting before it accepts a candidate. Add exactly these
-environment values:
+workflow checks that setting before it accepts a candidate. Add this environment
+secret:
 
 - environment secret `MITOSU_RUNTIME_PACK_SIGNING_KEY_PEM`, containing one
-  persistent Ed25519 private key in PEM form; and
-- environment variable `MITOSU_RUNTIME_PACK_PUBLIC_KEY`, containing the
-  corresponding raw 32-byte public key as 64 lowercase hexadecimal characters.
+  persistent Ed25519 private key in PEM form.
+
+The corresponding raw 32-byte public key is checked in as 64 lowercase
+hexadecimal characters at `release/runtime-pack-ed25519-public-key.hex`. Changing
+the trust pin therefore requires source review and a new exact source revision;
+an environment administrator cannot silently replace the private key and pin
+together.
 
 Generate the key on a trusted administrative machine and keep an encrypted
 offline backup before installing the environment secret:
@@ -82,20 +88,24 @@ openssl pkey -in mitosu-runtime-pack-signing-key.pem \
 tail -c 32 mitosu-runtime-pack-public.der | od -An -v -tx1 | tr -d '[:space:]'
 ```
 
+Install that hexadecimal value at
+`release/runtime-pack-ed25519-public-key.hex` in the same reviewed change that
+introduces or rotates the environment secret.
+
 The private key is never committed, uploaded as an artifact, passed to the
 candidate-validation job, or used by the image publication job. The protected
 signing job writes it to a mode-`0600` temporary file, unsets the environment
 value, signs after all manifest bytes are final, checks the derived public key
-against the protected environment variable, and removes the file before
+against the source-controlled public-key pin, and removes the file before
 packaging. Public outputs contain only `ed25519-public-key.hex`,
 `manifest.sig`, `release-handoff.json`, and the signed pack archive.
 
 Establishing or rotating the official key requires an application release
 decision because each deployed runtime-pack configuration pins both the public
 key and exact manifest digest. For rotation, create and back up a new key,
-publish its public key in an application/configuration release, wait for that
-release to reach the intended machines, then replace the environment secret
-and variable together. Never reuse a pack ID or release tag across keys. If a
+commit its public key through review and publish it in an application/configuration
+release, wait for that release to reach the intended machines, then replace the
+environment secret. Never reuse a pack ID or release tag across keys. If a
 key may be compromised, delete the environment secret immediately, disable
 the release workflows, remove affected pack configuration from managed
 machines, and issue a new key and pack ID. Existing signatures have no online
@@ -138,8 +148,8 @@ The signed release job must stop unless all of the following are available:
 3. signed marker attestations for the selected Node and Python workload images;
 4. a checksum-pinned and executable `openshell_driver_vm` input for each host
    target;
-5. the protected Ed25519 environment secret, matching public-key variable,
-   required reviewers, and approved rotation plan; and
+5. the protected Ed25519 environment secret, matching source-controlled public
+   key, required reviewers, and approved rotation plan; and
 6. a direct HTTPS directory host or an installer-owned absolute directory.
 
 The workflow implements these gates but does not claim a production release

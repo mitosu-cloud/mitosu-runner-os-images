@@ -123,12 +123,18 @@ pass 'candidate extractor rejects links and special archive members'
 
 workflow="$REPOSITORY_ROOT/.github/workflows/runtime-pack-release.yml"
 publish_workflow="$REPOSITORY_ROOT/.github/workflows/self-hosted-publish.yml"
+release_public_key="$REPOSITORY_ROOT/release/runtime-pack-ed25519-public-key.hex"
+[[ -f $release_public_key && ! -L $release_public_key ]] ||
+  fail 'source-controlled release public key is missing or unsafe'
+public_key_value=$(tr -d '[:space:]' < "$release_public_key")
+[[ $public_key_value =~ ^[a-f0-9]{64}$ ]] ||
+  fail 'source-controlled release public key is not 32-byte lowercase hexadecimal'
 grep -Fq 'environment: runtime-release' "$workflow" ||
   fail 'runtime-pack signing job is not protected by the release environment'
 grep -Fq 'MITOSU_RUNTIME_PACK_SIGNING_KEY_PEM' "$workflow" ||
   fail 'runtime-pack workflow does not use the protected signing secret'
-grep -Fq 'MITOSU_RUNTIME_PACK_PUBLIC_KEY' "$workflow" ||
-  fail 'runtime-pack workflow does not compare against the pinned public key'
+grep -Fq 'release/runtime-pack-ed25519-public-key.hex' "$workflow" ||
+  fail 'runtime-pack workflow does not compare against the source-controlled public key'
 grep -Fq 'immutable-releases' "$workflow" ||
   fail 'runtime-pack workflow does not require immutable GitHub releases'
 provenance_pin_count=0

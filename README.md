@@ -175,7 +175,7 @@ the pack. The protected `runtime-pack-release.yml` workflow accepts a
 checksum-pinned unsigned archive rooted at `pack/`, validates the required VM
 driver and attested Ubuntu Node/Python images, verifies GitHub provenance for
 every OCI digest, signs with the protected environment key, checks the derived
-public key against the environment pin, attests the release files through
+public key against the source-controlled pin, attests the release files through
 GitHub OIDC, and publishes an immutable-tagged GitHub release. See the
 [release policy](docs/release.md) for environment setup, publication gates,
 and key handling.

@@ -172,13 +172,13 @@ jobs:
         id: release
         env:
           CANDIDATE_SHA256: ${{ inputs.candidate_sha256 }}
-          EXPECTED_PUBLIC_KEY: ${{ vars.MITOSU_RUNTIME_PACK_PUBLIC_KEY }}
           PACK_ID: ${{ needs.validate-candidate.outputs.pack_id }}
           RELEASE_TAG: ${{ inputs.release_tag }}
           SIGNING_KEY_PEM: ${{ secrets.MITOSU_RUNTIME_PACK_SIGNING_KEY_PEM }}
           SOURCE_BASE_URL: ${{ inputs.source_base_url }}
         run: |
-          [[ "$EXPECTED_PUBLIC_KEY" =~ ^[a-f0-9]{64}$ ]]
+          expected_public_key=$(tr -d '[:space:]' < release/runtime-pack-ed25519-public-key.hex)
+          [[ "$expected_public_key" =~ ^[a-f0-9]{64}$ ]]
           [[ -n "$SIGNING_KEY_PEM" ]]
           candidate="$MITOSU_BUILD_ROOT/release-input/candidate.tar"
           printf '%s  %s\n' "$CANDIDATE_SHA256" "$candidate" | sha256sum --check --strict
@@ -201,10 +201,10 @@ jobs:
             --source "$SOURCE_BASE_URL" >/dev/null
           cleanup_key
           trap - EXIT
-          test "$(tr -d '[:space:]' < "$pack/ed25519-public-key.hex")" = "$EXPECTED_PUBLIC_KEY"
+          test "$(tr -d '[:space:]' < "$pack/ed25519-public-key.hex")" = "$expected_public_key"
           ./scripts/verify-runtime-pack.sh \
             --pack-dir "$pack" \
-            --public-key "$EXPECTED_PUBLIC_KEY" >/dev/null
+            --public-key "$expected_public_key" >/dev/null
 
           release_dir="$MITOSU_BUILD_ROOT/release-output"
           mkdir -m 0700 -p "$release_dir"
