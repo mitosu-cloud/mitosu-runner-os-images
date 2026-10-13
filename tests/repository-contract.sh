@@ -51,6 +51,22 @@ pass 'marker and release-manifest fixtures validate'
 "$TEST_DIR/publish-script-contract.sh"
 "$TEST_DIR/build-root-contract.sh"
 
+ubuntu_containerfile="$REPOSITORY_ROOT/images/ubuntu/Containerfile"
+for stage in node python; do
+  stage_body=$(awk -v stage="$stage" '
+    $0 == "FROM common AS " stage {inside = 1; next}
+    inside && /^FROM / {exit}
+    inside {print}
+  ' "$ubuntu_containerfile")
+  grep -qx 'ARG BASE_IMAGE' <<<"$stage_body" ||
+    fail "$stage stage does not import BASE_IMAGE for its provenance label"
+  # The literal build-argument reference must remain in the Containerfile label.
+  # shellcheck disable=SC2016
+  grep -q 'dev.mitosu.base.digest="${BASE_IMAGE}"' <<<"$stage_body" ||
+    fail "$stage stage does not record the locked base image"
+done
+pass 'profile stages retain the locked base-image provenance label'
+
 invalid_marker="$test_staging/invalid-marker.json"
 jq '.tool_user.uid = 0' "$REPOSITORY_ROOT/tests/common/image-marker.valid.json" >"$invalid_marker"
 if validate_json_schema "$REPOSITORY_ROOT/schemas/image-marker.schema.json" "$invalid_marker" \
