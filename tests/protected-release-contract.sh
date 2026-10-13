@@ -135,8 +135,8 @@ grep -Fq 'MITOSU_RUNTIME_PACK_SIGNING_KEY_PEM' "$workflow" ||
   fail 'runtime-pack workflow does not use the protected signing secret'
 grep -Fq 'release/runtime-pack-ed25519-public-key.hex' "$workflow" ||
   fail 'runtime-pack workflow does not compare against the source-controlled public key'
-grep -Fq 'immutable-releases' "$workflow" ||
-  fail 'runtime-pack workflow does not require immutable GitHub releases'
+grep -Fq -- '--json isImmutable' "$workflow" ||
+  fail 'runtime-pack workflow does not verify its published release is immutable'
 grep -Fq 'actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b' "$workflow" ||
   fail 'runtime-pack workflow does not pin the reviewed Pages artifact action'
 grep -Fq 'actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e' "$workflow" ||
