@@ -100,7 +100,12 @@ RUN apt-get update \
     && curl --fail --location --proto '=https' --tlsv1.2 \
        "$TOOLCHAIN_URL" --output /tmp/node.tar.xz \
     && printf '%s  %s\n' "$TOOLCHAIN_SHA256" /tmp/node.tar.xz | sha256sum --check --strict \
-    && tar --extract --xz --no-same-owner --no-same-permissions --file /tmp/node.tar.xz --directory /usr/local --strip-components 1 \
+    && tar --extract --xz --no-same-owner --no-same-permissions \
+       --exclude='*/bin/corepack' --exclude='*/bin/npm' --exclude='*/bin/npx' \
+       --file /tmp/node.tar.xz --directory /usr/local --strip-components 1 \
+    && ln -s ../lib/node_modules/corepack/dist/corepack.js /usr/local/bin/corepack \
+    && ln -s ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
+    && ln -s ../lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx \
     && test "$(node --version)" = v22.22.1 \
     && test "$(npm --version)" = 10.9.4 \
     && test "$(corepack --version)" = 0.34.6 \
