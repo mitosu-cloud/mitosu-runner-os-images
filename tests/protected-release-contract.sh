@@ -137,6 +137,14 @@ grep -Fq 'release/runtime-pack-ed25519-public-key.hex' "$workflow" ||
   fail 'runtime-pack workflow does not compare against the source-controlled public key'
 grep -Fq 'immutable-releases' "$workflow" ||
   fail 'runtime-pack workflow does not require immutable GitHub releases'
+grep -Fq 'actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b' "$workflow" ||
+  fail 'runtime-pack workflow does not pin the reviewed Pages artifact action'
+grep -Fq 'actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e' "$workflow" ||
+  fail 'runtime-pack workflow does not pin the reviewed Pages deployment action'
+grep -Fq 'needs: [validate-candidate, sign-runtime-pack, deploy-runtime-pack]' "$workflow" ||
+  fail 'immutable release publication is not ordered after direct hosting'
+grep -Fq -- "--proto '=https' --tlsv1.2 --max-redirs 0" "$workflow" ||
+  fail 'published runtime-pack verification permits redirects'
 provenance_pin_count=0
 for workflow_file in "$workflow" "$publish_workflow"; do
   workflow_pin_count=$(grep -Fc \
