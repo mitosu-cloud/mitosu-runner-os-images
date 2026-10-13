@@ -56,7 +56,6 @@ jobs:
       packages: write
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      MITOSU_ATTEST_HOME: ${{ runner.temp }}/mitosu-attest-${{ github.run_id }}-${{ github.run_attempt }}
       MITOSU_BUILD_ROOT: /tmp/mitosu-runner-os-images
       MITOSU_REGISTRY_USER: ${{ github.actor }}
     steps:
@@ -174,7 +173,7 @@ jobs:
 
       - name: Configure isolated GHCR credentials for provenance
         env:
-          HOME: ${{ env.MITOSU_ATTEST_HOME }}
+          HOME: ${{ runner.temp }}/mitosu-attest-${{ github.run_id }}-${{ github.run_attempt }}
         run: |
           test -n "$GH_TOKEN"
           test -n "$MITOSU_REGISTRY_USER"
@@ -189,7 +188,7 @@ jobs:
         id: provenance
         uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3.0.0
         env:
-          HOME: ${{ env.MITOSU_ATTEST_HOME }}
+          HOME: ${{ runner.temp }}/mitosu-attest-${{ github.run_id }}-${{ github.run_attempt }}
         with:
           subject-name: ${{ steps.report.outputs.subject_name }}
           subject-digest: ${{ steps.report.outputs.subject_digest }}
@@ -226,7 +225,7 @@ jobs:
       - name: Remove isolated GHCR credentials
         if: always()
         env:
-          HOME: ${{ env.MITOSU_ATTEST_HOME }}
+          HOME: ${{ runner.temp }}/mitosu-attest-${{ github.run_id }}-${{ github.run_attempt }}
         run: |
           rm -f -- "$HOME/.docker/config.json"
           rmdir -- "$HOME/.docker" "$HOME" 2>/dev/null || true

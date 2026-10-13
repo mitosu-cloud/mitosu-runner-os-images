@@ -150,12 +150,8 @@ grep -Fq 'push-to-registry: true' "$publish_workflow" ||
   fail 'image provenance is not pushed beside the OCI manifest'
 # GitHub expressions must remain literal here.
 # shellcheck disable=SC2016
-grep -Fq 'MITOSU_ATTEST_HOME: ${{ runner.temp }}/mitosu-attest-${{ github.run_id }}-${{ github.run_attempt }}' \
-  "$publish_workflow" ||
-  fail 'image publication does not isolate provenance registry credentials'
-# GitHub expressions must remain literal here.
-# shellcheck disable=SC2016
-[[ $(grep -Fc 'HOME: ${{ env.MITOSU_ATTEST_HOME }}' "$publish_workflow") -eq 3 ]] ||
+[[ $(grep -Fc 'HOME: ${{ runner.temp }}/mitosu-attest-${{ github.run_id }}-${{ github.run_attempt }}' \
+  "$publish_workflow") -eq 3 ]] ||
   fail 'provenance credential setup, use, and cleanup do not share the isolated home'
 # The workflow shell variable must remain literal here.
 # shellcheck disable=SC2016
