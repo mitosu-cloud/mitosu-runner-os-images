@@ -47,8 +47,8 @@
     },
     {
       "id": "node",
-      "revision": 2,
-      "capabilities": ["shell", "git", "node", "c", "cpp"],
+      "revision": 3,
+      "capabilities": ["shell", "git", "curl", "node", "c", "cpp"],
       "toolchain_lock": "locks/toolchains/node.json",
       "suggested_runtime_egress": [
         "github.com",
@@ -59,8 +59,8 @@
     },
     {
       "id": "python",
-      "revision": 1,
-      "capabilities": ["shell", "git", "python", "uv", "c"],
+      "revision": 2,
+      "capabilities": ["shell", "git", "curl", "python", "uv", "c"],
       "toolchain_lock": "locks/toolchains/python.json",
       "suggested_runtime_egress": [
         "github.com",

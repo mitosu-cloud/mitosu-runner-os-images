@@ -121,6 +121,50 @@ if "$REPOSITORY_ROOT/scripts/extract-runtime-pack-candidate.py" \
 fi
 pass 'candidate extractor rejects links and special archive members'
 
+openssl genpkey -algorithm ED25519 -out "$staging/pages-signing-key.pem" 2>/dev/null
+prior_pack="$staging/prior-pack"
+current_pack="$staging/current-pack"
+for pages_pack_id in pages-prior-linux-x86_64 pages-current-linux-x86_64; do
+  pages_pack="$current_pack"
+  if [[ $pages_pack_id == pages-prior-linux-x86_64 ]]; then
+    pages_pack="$prior_pack"
+  fi
+  "$REPOSITORY_ROOT/scripts/assemble-runtime-pack.sh" \
+    --output "$pages_pack" \
+    --pack-id "$pages_pack_id" \
+    --target-os linux \
+    --target-arch x86_64 \
+    --oci-images "$staging/oci-images.json" \
+    --artifact openshell_driver_vm "$staging/openshell-driver-vm" bin/openshell-driver-vm true \
+    >/dev/null
+  "$REPOSITORY_ROOT/scripts/sign-runtime-pack.sh" \
+    --pack-dir "$pages_pack" \
+    --private-key "$staging/pages-signing-key.pem" \
+    --source "https://mitosu-cloud.github.io/mitosu-runner-os-images/runtime-packs/$pages_pack_id/" \
+    >/dev/null
+done
+pages_public_key=$(tr -d '[:space:]' < "$current_pack/ed25519-public-key.hex")
+prior_release_name=runtime-pack-pages-prior-linux-x86_64
+prior_release_dir="$staging/prior-releases/$prior_release_name"
+prior_archive_root="$staging/prior-archive-root"
+mkdir -p "$prior_release_dir" "$prior_archive_root"
+cp -a -- "$prior_pack" "$prior_archive_root/pack"
+tar -C "$prior_archive_root" -czf "$prior_release_dir/$prior_release_name.tar.gz" pack
+printf '%s  %s\n' \
+  "$(sha256_file "$prior_release_dir/$prior_release_name.tar.gz")" \
+  "$prior_release_name.tar.gz" > "$prior_release_dir/SHA256SUMS"
+pages_site="$staging/pages-site"
+"$REPOSITORY_ROOT/scripts/stage-runtime-pack-pages.sh" \
+  --site-dir "$pages_site" \
+  --current-pack "$current_pack" \
+  --prior-releases-dir "$staging/prior-releases" \
+  --public-key "$pages_public_key" >/dev/null
+[[ -f $pages_site/runtime-packs/pages-prior-linux-x86_64/manifest.sig ]] ||
+  fail 'Pages staging omitted a prior immutable runtime pack'
+[[ -f $pages_site/runtime-packs/pages-current-linux-x86_64/manifest.sig ]] ||
+  fail 'Pages staging omitted the current runtime pack'
+pass 'Pages staging preserves prior signed packs beside the current release'
+
 workflow="$REPOSITORY_ROOT/.github/workflows/runtime-pack-release.yml"
 publish_workflow="$REPOSITORY_ROOT/.github/workflows/self-hosted-publish.yml"
 release_public_key="$REPOSITORY_ROOT/release/runtime-pack-ed25519-public-key.hex"
@@ -145,6 +189,10 @@ grep -Fq 'needs: [validate-candidate, sign-runtime-pack, deploy-runtime-pack]' "
   fail 'immutable release publication is not ordered after direct hosting'
 grep -Fq -- "--proto '=https' --tlsv1.2 --max-redirs 0" "$workflow" ||
   fail 'published runtime-pack verification permits redirects'
+grep -Fq 'scripts/stage-runtime-pack-pages.sh' "$workflow" ||
+  fail 'runtime-pack workflow does not preserve prior immutable Pages directories'
+[[ $(grep -Fc -- '--json isImmutable' "$workflow") -ge 2 ]] ||
+  fail 'runtime-pack workflow does not require prior releases to be immutable'
 provenance_pin_count=0
 for workflow_file in "$workflow" "$publish_workflow"; do
   workflow_pin_count=$(grep -Fc \

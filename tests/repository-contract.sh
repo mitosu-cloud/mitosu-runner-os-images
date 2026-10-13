@@ -106,6 +106,18 @@ jq -e --argjson expected "$expected_ids" \
   fail 'resolved matrix does not contain the required nine image IDs'
 pass 'nine images resolve for amd64 and arm64'
 
+jq -e '
+  .profiles
+  | map(select(.id == "node" or .id == "python"))
+  | length == 2 and all(.capabilities | index("curl") != null)
+' "$matrix" >/dev/null ||
+  fail 'ACP workload profiles do not attest the installed curl capability'
+[[ $(jq -r '.profiles[] | select(.id == "node") | .revision' "$matrix") -ge 3 ]] ||
+  fail 'Node profile revision was not advanced for the curl capability contract'
+[[ $(jq -r '.profiles[] | select(.id == "python") | .revision' "$matrix") -ge 2 ]] ||
+  fail 'Python profile revision was not advanced for the curl capability contract'
+pass 'ACP workload profiles attest curl at their revised contracts'
+
 expect_invalid unknown_field '.unexpected = true'
 expect_invalid unknown_architecture '.architectures += ["ppc64le"]'
 expect_invalid duplicate_distribution '.distributions += [.distributions[0]]'
