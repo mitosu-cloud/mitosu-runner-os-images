@@ -67,6 +67,10 @@ for stage in node python; do
 done
 pass 'profile stages retain the locked base-image provenance label'
 
+grep -Fq -- '--skip-unused-stages=true' "$REPOSITORY_ROOT/scripts/build-images.sh" ||
+  fail 'image builds do not explicitly skip unrelated profile stages'
+pass 'image builds skip unrelated profile stages'
+
 invalid_marker="$test_staging/invalid-marker.json"
 jq '.tool_user.uid = 0' "$REPOSITORY_ROOT/tests/common/image-marker.valid.json" >"$invalid_marker"
 if validate_json_schema "$REPOSITORY_ROOT/schemas/image-marker.schema.json" "$invalid_marker" \

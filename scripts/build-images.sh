@@ -184,6 +184,7 @@ fi
 build_arguments=(
   --arch "$architecture"
   --file "$containerfile"
+  --skip-unused-stages=true
   --target "$profile"
   --tag "$image_reference"
   --build-arg "BASE_IMAGE=$base_image"
