@@ -153,7 +153,7 @@ The signed release job must stop unless all of the following are available:
 6. a direct HTTPS directory host or an installer-owned absolute directory.
 
 The workflow implements these gates but does not claim a production release
-exists. The Node and Python profile locks and Containerfile stages, native
-arm64 publication evidence, protected environment/key configuration, and final
-direct-directory deployment must all be completed before dispatching an
-official pack release.
+exists. Ubuntu Node and Python profile locks and Containerfile stages are
+implemented. Publishing both architectures with native smoke evidence,
+publishing the rebuilt OpenShell inputs and VM driver, and final direct-directory
+deployment remain required before dispatching an official pack release.

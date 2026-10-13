@@ -14,7 +14,7 @@ help:
 	  'test      run repository contract tests' \
 	  'lint      run ShellCheck over repository shell scripts' \
 	  'verify-inputs  verify locked OS repository metadata (requires network)' \
-	  'build     build one common image; set DISTRIBUTION and optional runner variables' \
+	  'build     build one image; set DISTRIBUTION and optional PROFILE/runner variables' \
 	  'smoke     smoke an image; set IMAGE to its local reference' \
 	  'verify    run smoke, runner-byte, and stored-root inspection checks' \
 	  'publish   build, verify, and push current images; set RELEASE_TAG and optional ARCHITECTURE' \
@@ -49,6 +49,7 @@ build:
 	@test -n "$(DISTRIBUTION)" || { echo 'error: set DISTRIBUTION=ubuntu-26.04 or almalinux-10' >&2; exit 2; }
 	@args=(--distribution "$(DISTRIBUTION)"); \
 	  if [[ -n "$(ARCHITECTURE)" ]]; then args+=(--architecture "$(ARCHITECTURE)"); fi; \
+	  if [[ -n "$(PROFILE)" ]]; then args+=(--profile "$(PROFILE)"); fi; \
 	  if [[ -n "$(RUNNER_IMAGE)" ]]; then args+=(--runner-image "$(RUNNER_IMAGE)"); fi; \
 	  if [[ -n "$(RUNNER_SOURCE_DIGEST)" ]]; then args+=(--runner-source-digest "$(RUNNER_SOURCE_DIGEST)"); fi; \
 	  ./scripts/build-images.sh "$${args[@]}"
@@ -64,7 +65,9 @@ verify:
 publish:
 	@test -n "$(RELEASE_TAG)" || { echo 'error: set RELEASE_TAG' >&2; exit 2; }
 	@args=(--tag "$(RELEASE_TAG)"); \
+	  if [[ -n "$(DISTRIBUTION)" ]]; then args+=(--distribution "$(DISTRIBUTION)"); fi; \
 	  if [[ -n "$(ARCHITECTURE)" ]]; then args+=(--architecture "$(ARCHITECTURE)"); fi; \
+	  if [[ -n "$(PROFILE)" ]]; then args+=(--profile "$(PROFILE)"); fi; \
 	  if [[ "$(ALLOW_EMULATED)" == 1 ]]; then args+=(--allow-emulated); fi; \
 	  if [[ -n "$(REPOSITORY)" ]]; then args+=(--repository "$(REPOSITORY)"); fi; \
 	  ./scripts/build-and-push-images.sh "$${args[@]}"

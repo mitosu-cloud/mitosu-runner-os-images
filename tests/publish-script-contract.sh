@@ -44,6 +44,29 @@ selected_plan=$("$REPOSITORY_ROOT/scripts/build-and-push-images.sh" \
   fail 'dry-run architecture selector returned an unexpected architecture'
 pass 'GHCR publication dry run selects one distribution and architecture'
 
+profile_plan=$("$REPOSITORY_ROOT/scripts/build-and-push-images.sh" \
+  --tag contract-test-profile \
+  --distribution ubuntu-26.04 \
+  --profile python \
+  --dry-run)
+[[ $(jq -r '.profile' <<<"$profile_plan") == python ]] ||
+  fail 'profile publication plan omitted the selected profile'
+[[ $(jq -r '.images | join(" ")' <<<"$profile_plan") == ubuntu-26.04-python ]] ||
+  fail 'profile publication plan returned an unexpected image'
+pass 'GHCR publication dry run selects a build-ready profile'
+
+if "$REPOSITORY_ROOT/scripts/build-and-push-images.sh" \
+    --tag contract-test-profile-invalid \
+    --distribution almalinux-10 \
+    --profile python \
+    --dry-run \
+    >"$staging/profile-invalid.stdout" 2>"$staging/profile-invalid.stderr"; then
+  fail 'publication script accepted a profile without a build-ready distribution lock'
+fi
+grep -Fq 'python is not build-ready for almalinux-10' "$staging/profile-invalid.stderr" ||
+  fail 'publication script did not explain the unavailable profile combination'
+pass 'GHCR publication rejects unavailable profile combinations'
+
 if "$REPOSITORY_ROOT/scripts/build-and-push-images.sh" \
     --tag contract-test-unknown \
     --distribution missing-1 \

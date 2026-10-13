@@ -18,6 +18,14 @@ on:
         options:
           - ubuntu-26.04
           - almalinux-10
+      profile:
+        description: Locked image profile to publish
+        required: true
+        type: choice
+        options:
+          - common
+          - node
+          - python
       architecture:
         description: Target OCI architecture, or both for a multi-platform index
         required: true
@@ -56,12 +64,17 @@ jobs:
           ALLOW_EMULATED: ${{ inputs.allow_emulated }}
           ARCHITECTURE: ${{ inputs.architecture }}
           DISTRIBUTION: ${{ inputs.distribution }}
+          PROFILE: ${{ inputs.profile }}
           SOURCE_SHA: ${{ inputs.source_sha }}
           RELEASE_TAG: ${{ inputs.release_tag }}
         run: |
           [[ "$SOURCE_SHA" =~ ^[a-f0-9]{40}$ ]]
           [[ "$RELEASE_TAG" =~ ^[a-z0-9][a-z0-9._-]{0,63}$ ]]
           [[ "$DISTRIBUTION" == ubuntu-26.04 || "$DISTRIBUTION" == almalinux-10 ]]
+          [[ "$PROFILE" == common || "$PROFILE" == node || "$PROFILE" == python ]]
+          if [[ "$PROFILE" != common ]]; then
+            [[ "$DISTRIBUTION" == ubuntu-26.04 ]]
+          fi
           [[ "$ARCHITECTURE" == amd64 || "$ARCHITECTURE" == arm64 || "$ARCHITECTURE" == both ]]
           [[ "$ALLOW_EMULATED" == true || "$ALLOW_EMULATED" == false ]]
           if [[ "$ARCHITECTURE" == arm64 || "$ARCHITECTURE" == both ]]; then
@@ -92,16 +105,18 @@ jobs:
       - name: Validate repository contract
         run: make test
 
-      - name: Publish verified common image
+      - name: Publish verified image
         env:
           ALLOW_EMULATED: ${{ inputs.allow_emulated }}
           ARCHITECTURE: ${{ inputs.architecture }}
           DISTRIBUTION: ${{ inputs.distribution }}
+          PROFILE: ${{ inputs.profile }}
           RELEASE_TAG: ${{ inputs.release_tag }}
         run: |
           args=(
             --tag "$RELEASE_TAG"
             --distribution "$DISTRIBUTION"
+            --profile "$PROFILE"
           )
           if [[ "$ARCHITECTURE" == both ]]; then
             args+=(--architecture amd64 --architecture arm64)
@@ -118,6 +133,7 @@ jobs:
         id: report
         env:
           ARCHITECTURE: ${{ inputs.architecture }}
+          PROFILE: ${{ inputs.profile }}
           SOURCE_SHA: ${{ inputs.source_sha }}
           RELEASE_TAG: ${{ inputs.release_tag }}
         run: |

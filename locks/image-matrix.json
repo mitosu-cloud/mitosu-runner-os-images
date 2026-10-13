@@ -47,7 +47,7 @@
     },
     {
       "id": "node",
-      "revision": 1,
+      "revision": 2,
       "capabilities": ["shell", "git", "node", "c", "cpp"],
       "toolchain_lock": "locks/toolchains/node.json",
       "suggested_runtime_egress": [
@@ -55,6 +55,19 @@
         "api.github.com",
         "nodejs.org",
         "registry.npmjs.org"
+      ]
+    },
+    {
+      "id": "python",
+      "revision": 1,
+      "capabilities": ["shell", "git", "python", "uv", "c"],
+      "toolchain_lock": "locks/toolchains/python.json",
+      "suggested_runtime_egress": [
+        "github.com",
+        "api.github.com",
+        "pypi.org",
+        "files.pythonhosted.org",
+        "astral.sh"
       ]
     },
     {
@@ -80,6 +93,11 @@
       "id": "ubuntu-26.04-node",
       "distribution": "ubuntu-26.04",
       "profile": "node"
+    },
+    {
+      "id": "ubuntu-26.04-python",
+      "distribution": "ubuntu-26.04",
+      "profile": "python"
     },
     {
       "id": "ubuntu-26.04-cpp",
