@@ -100,7 +100,7 @@ RUN apt-get update \
     && curl --fail --location --proto '=https' --tlsv1.2 \
        "$TOOLCHAIN_URL" --output /tmp/node.tar.xz \
     && printf '%s  %s\n' "$TOOLCHAIN_SHA256" /tmp/node.tar.xz | sha256sum --check --strict \
-    && tar --extract --xz --file /tmp/node.tar.xz --directory /usr/local --strip-components 1 \
+    && tar --extract --xz --no-same-owner --file /tmp/node.tar.xz --directory /usr/local --strip-components 1 \
     && test "$(node --version)" = v22.22.1 \
     && test "$(npm --version)" = 10.9.4 \
     && test "$(corepack --version)" = 0.34.6 \
@@ -170,7 +170,7 @@ RUN apt-get update \
        "$PYTHON_SOURCE_URL" --output /tmp/python.tar.xz \
     && printf '%s  %s\n' "$PYTHON_SOURCE_SHA256" /tmp/python.tar.xz | sha256sum --check --strict \
     && mkdir /tmp/python-source \
-    && tar --extract --xz --file /tmp/python.tar.xz --directory /tmp/python-source --strip-components 1 \
+    && tar --extract --xz --no-same-owner --file /tmp/python.tar.xz --directory /tmp/python-source --strip-components 1 \
     && cd /tmp/python-source \
     && ./configure --prefix=/usr/local --with-ensurepip=install \
     && make -j2 \
@@ -181,7 +181,7 @@ RUN apt-get update \
        "$UV_URL" --output /tmp/uv.tar.gz \
     && printf '%s  %s\n' "$UV_SHA256" /tmp/uv.tar.gz | sha256sum --check --strict \
     && mkdir /tmp/uv \
-    && tar --extract --gzip --file /tmp/uv.tar.gz --directory /tmp/uv --strip-components 1 \
+    && tar --extract --gzip --no-same-owner --file /tmp/uv.tar.gz --directory /tmp/uv --strip-components 1 \
     && install -m 0755 /tmp/uv/uv /tmp/uv/uvx /usr/local/bin/ \
     && test "$(python3 --version)" = 'Python 3.14.4' \
     && test "$(uv --version)" = 'uv 0.10.8' \
