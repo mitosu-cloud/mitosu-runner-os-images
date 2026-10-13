@@ -177,6 +177,16 @@ if [[ $profile != common ]]; then
       python_source_sha256=$(artifact_value python-source sha256)
       uv_url=$(artifact_value uv url)
       uv_sha256=$(artifact_value uv sha256)
+      # Older Podman/Buildah releases evaluate every stage before --target.
+      # The Node stage precedes Python in the shared Containerfile, so give
+      # that otherwise-unused stage its independently locked inputs as well.
+      node_profile_lock="$REPOSITORY_ROOT/locks/toolchains/node.json"
+      toolchain_url=$(jq -er --arg architecture "$architecture" \
+        '.artifacts[] | select(.name == "node" and .architecture == $architecture) | .url' \
+        "$node_profile_lock")
+      toolchain_sha256=$(jq -er --arg architecture "$architecture" \
+        '.artifacts[] | select(.name == "node" and .architecture == $architecture) | .sha256' \
+        "$node_profile_lock")
       ;;
   esac
 fi
@@ -184,7 +194,6 @@ fi
 build_arguments=(
   --arch "$architecture"
   --file "$containerfile"
-  --skip-unused-stages=true
   --target "$profile"
   --tag "$image_reference"
   --build-arg "BASE_IMAGE=$base_image"
@@ -213,6 +222,8 @@ case $profile in
     ;;
   python)
     build_arguments+=(
+      --build-arg "TOOLCHAIN_URL=$toolchain_url"
+      --build-arg "TOOLCHAIN_SHA256=$toolchain_sha256"
       --build-arg "PYTHON_SOURCE_URL=$python_source_url"
       --build-arg "PYTHON_SOURCE_SHA256=$python_source_sha256"
       --build-arg "UV_URL=$uv_url"

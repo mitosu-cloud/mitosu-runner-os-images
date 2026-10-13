@@ -67,9 +67,19 @@ for stage in node python; do
 done
 pass 'profile stages retain the locked base-image provenance label'
 
-grep -Fq -- '--skip-unused-stages=true' "$REPOSITORY_ROOT/scripts/build-images.sh" ||
-  fail 'image builds do not explicitly skip unrelated profile stages'
-pass 'image builds skip unrelated profile stages'
+grep -Fq 'Older Podman/Buildah releases evaluate every stage before --target' \
+  "$REPOSITORY_ROOT/scripts/build-images.sh" ||
+  fail 'Python builds do not account for legacy multi-stage target behavior'
+python_case=$(awk '
+  /^  python\)$/ {inside = 1}
+  inside {print}
+  inside && /^  esac$/ {exit}
+' "$REPOSITORY_ROOT/scripts/build-images.sh")
+grep -Fq -- '--build-arg "TOOLCHAIN_URL=$toolchain_url"' <<<"$python_case" ||
+  fail 'Python builds do not supply the preceding Node stage URL'
+grep -Fq -- '--build-arg "TOOLCHAIN_SHA256=$toolchain_sha256"' <<<"$python_case" ||
+  fail 'Python builds do not supply the preceding Node stage digest'
+pass 'Python builds support legacy Podman multi-stage target behavior'
 
 invalid_marker="$test_staging/invalid-marker.json"
 jq '.tool_user.uid = 0' "$REPOSITORY_ROOT/tests/common/image-marker.valid.json" >"$invalid_marker"
