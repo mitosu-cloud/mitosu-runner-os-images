@@ -75,8 +75,11 @@ python_case=$(awk '
   inside {print}
   inside && /^  esac$/ {exit}
 ' "$REPOSITORY_ROOT/scripts/build-images.sh")
+# These are literal build-argument references in the script under test.
+# shellcheck disable=SC2016
 grep -Fq -- '--build-arg "TOOLCHAIN_URL=$toolchain_url"' <<<"$python_case" ||
   fail 'Python builds do not supply the preceding Node stage URL'
+# shellcheck disable=SC2016
 grep -Fq -- '--build-arg "TOOLCHAIN_SHA256=$toolchain_sha256"' <<<"$python_case" ||
   fail 'Python builds do not supply the preceding Node stage digest'
 pass 'Python builds support legacy Podman multi-stage target behavior'
