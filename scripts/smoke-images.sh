@@ -229,6 +229,7 @@ case $profile in
     ;;
 esac
 if [[ -n $acp_application_root ]]; then
+  # shellcheck disable=SC2016 # Variables expand inside the container.
   run_podman run --rm --network none --read-only \
     --user 1000:1000 \
     --env "ACP_APPLICATION_ROOT=$acp_application_root" \
