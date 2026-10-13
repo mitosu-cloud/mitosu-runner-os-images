@@ -218,11 +218,35 @@ jobs:
               ed25519-public-key.hex > SHA256SUMS
           )
 
-          site_pack="$MITOSU_BUILD_ROOT/pages-site/runtime-packs/$PACK_ID"
-          install -d -m 0700 "$site_pack"
-          cp -a -- "$pack/." "$site_pack/"
-          find "$MITOSU_BUILD_ROOT/pages-site" -type d -exec chmod 0755 {} +
-          find "$MITOSU_BUILD_ROOT/pages-site" -type f -exec chmod 0444 {} +
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            printf 'error: release already exists: %s\n' "$RELEASE_TAG" >&2
+            exit 1
+          fi
+          prior_releases="$MITOSU_BUILD_ROOT/prior-runtime-pack-releases"
+          install -d -m 0700 "$prior_releases"
+          while IFS= read -r prior_tag; do
+            [[ $prior_tag == runtime-pack-* ]] || continue
+            [[ $prior_tag =~ ^runtime-pack-[a-z0-9][a-z0-9._-]{0,127}$ ]]
+            test "$(gh release view "$prior_tag" \
+              --repo "$GITHUB_REPOSITORY" \
+              --json isImmutable \
+              --jq .isImmutable)" = true
+            prior_dir="$prior_releases/$prior_tag"
+            install -d -m 0700 "$prior_dir"
+            gh release download "$prior_tag" \
+              --repo "$GITHUB_REPOSITORY" \
+              --pattern "$prior_tag.tar.gz" \
+              --pattern SHA256SUMS \
+              --dir "$prior_dir"
+          done < <(
+            gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
+              --jq '.[].tag_name'
+          )
+          ./scripts/stage-runtime-pack-pages.sh \
+            --site-dir "$MITOSU_BUILD_ROOT/pages-site" \
+            --current-pack "$pack" \
+            --prior-releases-dir "$prior_releases" \
+            --public-key "$expected_public_key" >/dev/null
 
       - name: Upload signed release bundle
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
