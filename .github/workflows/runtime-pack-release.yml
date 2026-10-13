@@ -1,0 +1,276 @@
+name: Protected runtime-pack release
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: Exact 40-character source revision containing the release contract
+        required: true
+        type: string
+      release_tag:
+        description: Immutable tag; must equal runtime-pack- plus the manifest pack_id
+        required: true
+        type: string
+      candidate_url:
+        description: HTTPS URL of an unsigned tar archive rooted at pack/
+        required: true
+        type: string
+      candidate_sha256:
+        description: SHA-256 of the unsigned candidate archive
+        required: true
+        type: string
+      source_base_url:
+        description: Direct HTTPS directory URL where unpacked signed files will be hosted
+        required: true
+        type: string
+
+concurrency:
+  group: runtime-pack-release
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash --noprofile --norc -euo pipefail {0}
+
+jobs:
+  validate-candidate:
+    name: Validate unsigned production candidate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      attestations: read
+      contents: read
+      packages: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      MITOSU_BUILD_ROOT: /tmp/mitosu-runner-os-images
+    outputs:
+      pack_id: ${{ steps.candidate.outputs.pack_id }}
+    steps:
+      - name: Validate immutable inputs
+        env:
+          CANDIDATE_SHA256: ${{ inputs.candidate_sha256 }}
+          CANDIDATE_URL: ${{ inputs.candidate_url }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          SOURCE_BASE_URL: ${{ inputs.source_base_url }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+        run: |
+          [[ "$SOURCE_SHA" =~ ^[a-f0-9]{40}$ ]]
+          [[ "$RELEASE_TAG" =~ ^[a-z0-9][a-z0-9._-]{0,127}$ ]]
+          [[ "$CANDIDATE_SHA256" =~ ^[a-f0-9]{64}$ ]]
+          for url in "$CANDIDATE_URL" "$SOURCE_BASE_URL"; do
+            [[ "$url" == https://* ]]
+            [[ "$url" != *\?* && "$url" != *\#* ]]
+            authority=${url#https://}
+            authority=${authority%%/*}
+            [[ -n "$authority" && "$authority" != *@* ]]
+          done
+          [[ "$SOURCE_BASE_URL" == */ ]]
+
+      - name: Check out exact source revision
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.source_sha }}
+          persist-credentials: false
+
+      - name: Require immutable GitHub releases
+        run: |
+          test "$(gh api \
+            -H 'X-GitHub-Api-Version: 2026-03-10' \
+            "repos/$GITHUB_REPOSITORY/immutable-releases" \
+            --jq .enabled)" = true
+
+      - name: Verify source and install validation tools
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          sudo apt-get update
+          sudo apt-get install --yes jq python3-jsonschema shellcheck
+          make test
+          make lint
+
+      - name: Download and validate candidate
+        id: candidate
+        env:
+          CANDIDATE_SHA256: ${{ inputs.candidate_sha256 }}
+          CANDIDATE_URL: ${{ inputs.candidate_url }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          mkdir -m 0700 -p "$MITOSU_BUILD_ROOT/release-input"
+          candidate="$MITOSU_BUILD_ROOT/release-input/candidate.tar"
+          curl --fail --location --proto '=https' --proto-redir '=https' --tlsv1.2 \
+            --max-filesize 34360786944 \
+            --output "$candidate" \
+            "$CANDIDATE_URL"
+          printf '%s  %s\n' "$CANDIDATE_SHA256" "$candidate" | sha256sum --check --strict
+          ./scripts/extract-runtime-pack-candidate.py \
+            "$candidate" "$MITOSU_BUILD_ROOT/release-input/extracted"
+          pack="$MITOSU_BUILD_ROOT/release-input/extracted/pack"
+          ./scripts/validate-production-runtime-pack.sh --pack-dir "$pack"
+          pack_id=$(jq -er '.pack_id' "$pack/manifest.json")
+          test "$RELEASE_TAG" = "runtime-pack-$pack_id"
+          printf 'pack_id=%s\n' "$pack_id" >> "$GITHUB_OUTPUT"
+
+      - name: Verify OCI image provenance
+        run: |
+          pack="$MITOSU_BUILD_ROOT/release-input/extracted/pack"
+          printf '%s' "$GH_TOKEN" | docker login ghcr.io \
+            --username "$GITHUB_ACTOR" --password-stdin >/dev/null
+          cleanup_registry() {
+            docker logout ghcr.io >/dev/null 2>&1 || true
+          }
+          trap cleanup_registry EXIT
+          while IFS= read -r reference; do
+            gh attestation verify "oci://$reference" \
+              --owner mitosu-cloud
+          done < <(jq -er '.oci_images[].reference' "$pack/manifest.json")
+          cleanup_registry
+          trap - EXIT
+
+      - name: Upload validated candidate
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: runtime-pack-candidate-${{ github.run_id }}
+          path: /tmp/mitosu-runner-os-images/release-input/candidate.tar
+          if-no-files-found: error
+          retention-days: 7
+
+  sign-and-publish:
+    name: Sign, attest, and publish runtime pack
+    needs: validate-candidate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment: runtime-release
+    permissions:
+      attestations: write
+      contents: write
+      id-token: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      MITOSU_BUILD_ROOT: /tmp/mitosu-runner-os-images
+    steps:
+      - name: Check out exact source revision
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.source_sha }}
+          persist-credentials: false
+
+      - name: Install validation tools
+        run: |
+          test "$(git rev-parse HEAD)" = "${{ inputs.source_sha }}"
+          sudo apt-get update
+          sudo apt-get install --yes jq python3-jsonschema
+
+      - name: Download validated candidate
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: runtime-pack-candidate-${{ github.run_id }}
+          path: /tmp/mitosu-runner-os-images/release-input
+
+      - name: Revalidate, sign, and package
+        id: release
+        env:
+          CANDIDATE_SHA256: ${{ inputs.candidate_sha256 }}
+          PACK_ID: ${{ needs.validate-candidate.outputs.pack_id }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          SIGNING_KEY_PEM: ${{ secrets.MITOSU_RUNTIME_PACK_SIGNING_KEY_PEM }}
+          SOURCE_BASE_URL: ${{ inputs.source_base_url }}
+        run: |
+          expected_public_key=$(tr -d '[:space:]' < release/runtime-pack-ed25519-public-key.hex)
+          [[ "$expected_public_key" =~ ^[a-f0-9]{64}$ ]]
+          [[ -n "$SIGNING_KEY_PEM" ]]
+          candidate="$MITOSU_BUILD_ROOT/release-input/candidate.tar"
+          printf '%s  %s\n' "$CANDIDATE_SHA256" "$candidate" | sha256sum --check --strict
+          ./scripts/extract-runtime-pack-candidate.py \
+            "$candidate" "$MITOSU_BUILD_ROOT/release-input/extracted"
+          pack="$MITOSU_BUILD_ROOT/release-input/extracted/pack"
+          ./scripts/validate-production-runtime-pack.sh --pack-dir "$pack" >/dev/null
+          test "$(jq -er '.pack_id' "$pack/manifest.json")" = "$PACK_ID"
+
+          key_file="$RUNNER_TEMP/runtime-pack-signing-key.pem"
+          cleanup_key() {
+            rm -f -- "$key_file"
+          }
+          trap cleanup_key EXIT
+          (umask 077; printf '%s\n' "$SIGNING_KEY_PEM" > "$key_file")
+          unset SIGNING_KEY_PEM
+          ./scripts/sign-runtime-pack.sh \
+            --pack-dir "$pack" \
+            --private-key "$key_file" \
+            --source "$SOURCE_BASE_URL" >/dev/null
+          cleanup_key
+          trap - EXIT
+          test "$(tr -d '[:space:]' < "$pack/ed25519-public-key.hex")" = "$expected_public_key"
+          ./scripts/verify-runtime-pack.sh \
+            --pack-dir "$pack" \
+            --public-key "$expected_public_key" >/dev/null
+
+          release_dir="$MITOSU_BUILD_ROOT/release-output"
+          mkdir -m 0700 -p "$release_dir"
+          archive="$release_dir/$RELEASE_TAG.tar.gz"
+          source_date_epoch=$(git show -s --format=%ct HEAD)
+          tar --sort=name \
+            --mtime="@$source_date_epoch" \
+            --owner=0 --group=0 --numeric-owner \
+            -C "$(dirname -- "$pack")" \
+            -czf "$archive" pack
+          cp -- "$pack/release-handoff.json" "$release_dir/release-handoff.json"
+          cp -- "$pack/ed25519-public-key.hex" "$release_dir/ed25519-public-key.hex"
+          (
+            cd "$release_dir"
+            sha256sum -- \
+              "$RELEASE_TAG.tar.gz" \
+              release-handoff.json \
+              ed25519-public-key.hex > SHA256SUMS
+          )
+          printf 'archive=%s\n' "$archive" >> "$GITHUB_OUTPUT"
+          printf 'checksums=%s\n' "$release_dir/SHA256SUMS" >> "$GITHUB_OUTPUT"
+          printf 'release_dir=%s\n' "$release_dir" >> "$GITHUB_OUTPUT"
+
+      - name: Attest signed release artifacts
+        id: provenance
+        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3.0.0
+        with:
+          subject-checksums: ${{ steps.release.outputs.checksums }}
+
+      - name: Publish immutable GitHub release
+        env:
+          ATTESTATION_URL: ${{ steps.provenance.outputs.attestation-url }}
+          RELEASE_DIR: ${{ steps.release.outputs.release_dir }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          SOURCE_BASE_URL: ${{ inputs.source_base_url }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+        run: |
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            printf 'error: release already exists: %s\n' "$RELEASE_TAG" >&2
+            exit 1
+          fi
+          if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$RELEASE_TAG" >/dev/null 2>&1; then
+            printf 'error: tag already exists: %s\n' "$RELEASE_TAG" >&2
+            exit 1
+          fi
+          notes="$RUNNER_TEMP/runtime-pack-release-notes.md"
+          {
+            printf 'Signed runtime pack `%s`.\n\n' "$RELEASE_TAG"
+            printf -- '- Source revision: `%s`\n' "$SOURCE_SHA"
+            printf -- '- Build provenance: %s\n' "$ATTESTATION_URL"
+            printf -- '- Installation source: `%s`\n' "$SOURCE_BASE_URL"
+          } > "$notes"
+          gh release create "$RELEASE_TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$SOURCE_SHA" \
+            --title "$RELEASE_TAG" \
+            --notes-file "$notes" \
+            "$RELEASE_DIR/${RELEASE_TAG}.tar.gz" \
+            "$RELEASE_DIR/SHA256SUMS" \
+            "$RELEASE_DIR/release-handoff.json" \
+            "$RELEASE_DIR/ed25519-public-key.hex"
+
+      - name: Upload signed release bundle
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ${{ inputs.release_tag }}
+          path: /tmp/mitosu-runner-os-images/release-output/
+          if-no-files-found: error
+          retention-days: 30

@@ -70,7 +70,7 @@ for output_name in manifest.sig ed25519-public-key.hex release-handoff.json; do
   [[ ! -e $pack_dir/$output_name ]] || die "refusing to overwrite $pack_dir/$output_name"
 done
 
-validate_json_schema "$REPOSITORY_ROOT/schemas/runtime-pack.schema.json" "$pack_dir/manifest.json"
+"$SCRIPT_DIR/verify-runtime-pack-candidate.sh" --pack-dir "$pack_dir" >/dev/null
 openssl pkey -in "$private_key" -check -noout >/dev/null
 
 staging=$(make_private_temp_dir runtime-pack-sign)

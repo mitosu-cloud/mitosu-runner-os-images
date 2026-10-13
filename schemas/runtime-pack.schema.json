@@ -13,7 +13,7 @@
     "oci_images"
   ],
   "properties": {
-    "schema_version": { "const": 1 },
+    "schema_version": { "enum": [1, 2] },
     "pack_id": {
       "type": "string",
       "minLength": 1,
@@ -34,6 +34,40 @@
       "items": { "$ref": "#/definitions/ociImage" }
     }
   },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "schema_version": { "const": 2 } },
+        "required": ["schema_version"]
+      },
+      "then": {
+        "allOf": [
+          {
+            "properties": {
+              "oci_images": {
+                "contains": {
+                  "type": "object",
+                  "required": ["name"],
+                  "properties": { "name": { "const": "openshell_supervisor_image" } }
+                }
+              }
+            }
+          },
+          {
+            "properties": {
+              "oci_images": {
+                "contains": {
+                  "type": "object",
+                  "required": ["name"],
+                  "properties": { "name": { "const": "openshell_sandbox_runtime_image" } }
+                }
+              }
+            }
+          }
+        ]
+      }
+    }
+  ],
   "definitions": {
     "name": {
       "type": "string",
@@ -76,6 +110,81 @@
         "reference": {
           "type": "string",
           "pattern": "^.+@sha256:[a-f0-9]{64}$"
+        },
+        "attestation": { "$ref": "#/definitions/runtimeImageAttestation" }
+      }
+    },
+    "runtimeImageAttestation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "image_id",
+        "profile_revision",
+        "guest_target",
+        "marker_sha256",
+        "runner_protocol",
+        "runner_source_digest",
+        "tool_uid",
+        "tool_gid",
+        "capabilities"
+      ],
+      "properties": {
+        "schema_version": { "const": 1 },
+        "image_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-z0-9-][a-z0-9.-]*$"
+        },
+        "profile_revision": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4294967295
+        },
+        "guest_target": {
+          "enum": [
+            "linux_aarch64",
+            "linux_x86_64",
+            "macos_aarch64",
+            "macos_x86_64",
+            "windows_aarch64",
+            "windows_x86_64"
+          ]
+        },
+        "marker_sha256": { "$ref": "#/definitions/sha256" },
+        "runner_protocol": { "const": "mitosu.runner.v1" },
+        "runner_source_digest": {
+          "type": "string",
+          "pattern": "^.+@sha256:[a-f0-9]{64}$"
+        },
+        "tool_uid": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4294967295
+        },
+        "tool_gid": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4294967295
+        },
+        "capabilities": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 128,
+          "uniqueItems": true,
+          "items": { "$ref": "#/definitions/name" }
+        },
+        "toolchains": {
+          "type": "object",
+          "maxProperties": 64,
+          "propertyNames": { "$ref": "#/definitions/name" },
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "^[ -~]+$"
+          }
         }
       }
     }

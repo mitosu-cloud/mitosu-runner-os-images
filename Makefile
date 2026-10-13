@@ -5,7 +5,7 @@ MITOSU_BUILD_ROOT ?= /tmp/mitosu-runner-os-images
 TMPDIR := /tmp
 export MITOSU_BUILD_ROOT TMPDIR
 
-.PHONY: help validate resolve test lint verify-inputs build smoke verify publish runtime-pack sign-runtime-pack verify-runtime-pack clean
+.PHONY: help validate resolve test lint verify-inputs build smoke verify publish runtime-pack assemble-runtime-pack sign-runtime-pack verify-runtime-pack clean
 
 help:
 	@printf '%s\n' \
@@ -14,11 +14,12 @@ help:
 	  'test      run repository contract tests' \
 	  'lint      run ShellCheck over repository shell scripts' \
 	  'verify-inputs  verify locked OS repository metadata (requires network)' \
-	  'build     build one common image; set DISTRIBUTION and optional runner variables' \
+	  'build     build one image; set DISTRIBUTION and optional PROFILE/runner variables' \
 	  'smoke     smoke an image; set IMAGE to its local reference' \
 	  'verify    run smoke, runner-byte, and stored-root inspection checks' \
 	  'publish   build, verify, and push current images; set RELEASE_TAG and optional ARCHITECTURE' \
 	  'runtime-pack  generate a consumer-compatible pack; set PACK_ID, KERNEL, RUNNER, INITFS, TOOL_IMAGE' \
+	  'assemble-runtime-pack  assemble a general pack; set PACK_ID, TARGET_OS, TARGET_ARCH, OCI_IMAGES, ARTIFACT_ARGS' \
 	  'sign-runtime-pack  sign a pack; set RUNTIME_PACK_DIR, SIGNING_KEY, and RUNTIME_PACK_SOURCE' \
 	  'verify-runtime-pack  verify a signed pack; set RUNTIME_PACK_DIR' \
 	  'clean     remove this project build root (outside the checkout)'
@@ -48,6 +49,7 @@ build:
 	@test -n "$(DISTRIBUTION)" || { echo 'error: set DISTRIBUTION=ubuntu-26.04 or almalinux-10' >&2; exit 2; }
 	@args=(--distribution "$(DISTRIBUTION)"); \
 	  if [[ -n "$(ARCHITECTURE)" ]]; then args+=(--architecture "$(ARCHITECTURE)"); fi; \
+	  if [[ -n "$(PROFILE)" ]]; then args+=(--profile "$(PROFILE)"); fi; \
 	  if [[ -n "$(RUNNER_IMAGE)" ]]; then args+=(--runner-image "$(RUNNER_IMAGE)"); fi; \
 	  if [[ -n "$(RUNNER_SOURCE_DIGEST)" ]]; then args+=(--runner-source-digest "$(RUNNER_SOURCE_DIGEST)"); fi; \
 	  ./scripts/build-images.sh "$${args[@]}"
@@ -63,7 +65,9 @@ verify:
 publish:
 	@test -n "$(RELEASE_TAG)" || { echo 'error: set RELEASE_TAG' >&2; exit 2; }
 	@args=(--tag "$(RELEASE_TAG)"); \
+	  if [[ -n "$(DISTRIBUTION)" ]]; then args+=(--distribution "$(DISTRIBUTION)"); fi; \
 	  if [[ -n "$(ARCHITECTURE)" ]]; then args+=(--architecture "$(ARCHITECTURE)"); fi; \
+	  if [[ -n "$(PROFILE)" ]]; then args+=(--profile "$(PROFILE)"); fi; \
 	  if [[ "$(ALLOW_EMULATED)" == 1 ]]; then args+=(--allow-emulated); fi; \
 	  if [[ -n "$(REPOSITORY)" ]]; then args+=(--repository "$(REPOSITORY)"); fi; \
 	  ./scripts/build-and-push-images.sh "$${args[@]}"
@@ -84,6 +88,20 @@ runtime-pack:
 	); \
 	if [[ -n "$(IMAGE_SET)" ]]; then args+=(--image-set "$(IMAGE_SET)"); fi; \
 	./scripts/generate-runtime-pack.sh "$${args[@]}"
+
+assemble-runtime-pack:
+	@test -n "$(PACK_ID)" || { echo 'error: set PACK_ID' >&2; exit 2; }
+	@test -n "$(TARGET_OS)" || { echo 'error: set TARGET_OS' >&2; exit 2; }
+	@test -n "$(TARGET_ARCH)" || { echo 'error: set TARGET_ARCH' >&2; exit 2; }
+	@test -n "$(OCI_IMAGES)" || { echo 'error: set OCI_IMAGES to a JSON array file' >&2; exit 2; }
+	@test -n "$(ARTIFACT_ARGS)" || { echo 'error: set ARTIFACT_ARGS to one or more --artifact argument groups' >&2; exit 2; }
+	@./scripts/assemble-runtime-pack.sh \
+	  --output "$${MITOSU_BUILD_ROOT:-/tmp/mitosu-runner-os-images}/runtime-packs/$(PACK_ID)" \
+	  --pack-id "$(PACK_ID)" \
+	  --target-os "$(TARGET_OS)" \
+	  --target-arch "$(TARGET_ARCH)" \
+	  --oci-images "$(OCI_IMAGES)" \
+	  $(ARTIFACT_ARGS)
 
 sign-runtime-pack:
 	@test -n "$(RUNTIME_PACK_DIR)" || { echo 'error: set RUNTIME_PACK_DIR' >&2; exit 2; }

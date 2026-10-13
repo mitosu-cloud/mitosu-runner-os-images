@@ -59,7 +59,7 @@ if [[ -z $public_key_hex ]]; then
 fi
 [[ $public_key_hex =~ ^[a-f0-9]{64}$ ]] || die 'Ed25519 public key must be 64 lowercase hexadecimal characters'
 
-validate_json_schema "$REPOSITORY_ROOT/schemas/runtime-pack.schema.json" "$pack_dir/manifest.json"
+"$SCRIPT_DIR/verify-runtime-pack-candidate.sh" --pack-dir "$pack_dir" --signed >/dev/null
 signature_hex=$(<"$pack_dir/manifest.sig")
 [[ $signature_hex =~ ^[a-f0-9]{128}$ ]] || die 'manifest signature must be 128 lowercase hexadecimal characters'
 

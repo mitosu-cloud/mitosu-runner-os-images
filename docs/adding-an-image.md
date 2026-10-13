@@ -19,6 +19,12 @@ but build code must accept only `locked` inputs. A locked OS base requires an
 OCI index digest and immutable repository snapshot metadata. A locked external
 toolchain artifact requires an exact version, architecture, URL, and SHA-256.
 
+`scripts/build-images.sh --profile PROFILE` accepts only implemented profile
+stages and rejects a pending lock or unsupported distribution/profile pair.
+`scripts/smoke-images.sh` then compares the image marker's revision,
+capabilities, toolchain versions, and lock digest to the same checked-in
+profile record before executing the toolchains without network access.
+
 Do not copy an existing Containerfile merely to change matrix data. Put shared
 guest setup under `images/common` and keep genuine distribution differences in
 the family Containerfile.

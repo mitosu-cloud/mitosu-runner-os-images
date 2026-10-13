@@ -47,8 +47,25 @@ validate_json_schema \
 pass 'marker and release-manifest fixtures validate'
 
 "$TEST_DIR/runtime-pack-contract.sh"
+"$TEST_DIR/protected-release-contract.sh"
 "$TEST_DIR/publish-script-contract.sh"
 "$TEST_DIR/build-root-contract.sh"
+
+ubuntu_containerfile="$REPOSITORY_ROOT/images/ubuntu/Containerfile"
+for stage in node python; do
+  stage_body=$(awk -v stage="$stage" '
+    $0 == "FROM common AS " stage {inside = 1; next}
+    inside && /^FROM / {exit}
+    inside {print}
+  ' "$ubuntu_containerfile")
+  grep -qx 'ARG BASE_IMAGE' <<<"$stage_body" ||
+    fail "$stage stage does not import BASE_IMAGE for its provenance label"
+  # The literal build-argument reference must remain in the Containerfile label.
+  # shellcheck disable=SC2016
+  grep -q 'dev.mitosu.base.digest="${BASE_IMAGE}"' <<<"$stage_body" ||
+    fail "$stage stage does not record the locked base image"
+done
+pass 'profile stages retain the locked base-image provenance label'
 
 invalid_marker="$test_staging/invalid-marker.json"
 jq '.tool_user.uid = 0' "$REPOSITORY_ROOT/tests/common/image-marker.valid.json" >"$invalid_marker"
@@ -62,15 +79,15 @@ resolved="$test_staging/resolved.json"
 "$REPOSITORY_ROOT/scripts/resolve-matrix.sh" --output "$resolved" >/dev/null
 validate_json_schema "$REPOSITORY_ROOT/schemas/resolved-matrix.schema.json" "$resolved"
 
-[[ $(jq '.entries | length' "$resolved") == 16 ]] || fail 'resolved matrix does not contain 16 entries'
+[[ $(jq '.entries | length' "$resolved") == 18 ]] || fail 'resolved matrix does not contain 18 entries'
 jq -e '.entries | group_by([.image_id, .architecture]) | all(length == 1)' "$resolved" >/dev/null ||
   fail 'resolved image/architecture tuples are not unique'
 
-expected_ids='["almalinux-10-cpp","almalinux-10-go","almalinux-10-node","almalinux-10-rust","ubuntu-26.04-cpp","ubuntu-26.04-go","ubuntu-26.04-node","ubuntu-26.04-rust"]'
+expected_ids='["almalinux-10-cpp","almalinux-10-go","almalinux-10-node","almalinux-10-rust","ubuntu-26.04-cpp","ubuntu-26.04-go","ubuntu-26.04-node","ubuntu-26.04-python","ubuntu-26.04-rust"]'
 jq -e --argjson expected "$expected_ids" \
   '[.entries[].image_id] | unique == $expected' "$resolved" >/dev/null ||
-  fail 'resolved matrix does not contain the required eight image IDs'
-pass 'eight images resolve for amd64 and arm64'
+  fail 'resolved matrix does not contain the required nine image IDs'
+pass 'nine images resolve for amd64 and arm64'
 
 expect_invalid unknown_field '.unexpected = true'
 expect_invalid unknown_architecture '.architectures += ["ppc64le"]'
@@ -99,7 +116,7 @@ jq '
 synthetic_resolved="$test_staging/synthetic-resolved.json"
 "$REPOSITORY_ROOT/scripts/resolve-matrix.sh" \
   --matrix "$synthetic" --output "$synthetic_resolved" >/dev/null
-[[ $(jq '.entries | length' "$synthetic_resolved") == 20 ]] ||
+[[ $(jq '.entries | length' "$synthetic_resolved") == 22 ]] ||
   fail 'synthetic profile did not resolve through data-only matrix changes'
 pass 'a synthetic profile resolves through one matrix data change'
 

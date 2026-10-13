@@ -36,7 +36,7 @@ RUN test -n "$UBUNTU_SNAPSHOT" \
     && install -d -m 0755 /workspace /usr/share/mitosu \
     && install -d -m 0750 -o 1000 -g 1000 \
        /var/lib/mitosu/apps /var/cache/mitosu \
-    && dpkg-query -W -f='${binary:Package}\t${Version}\n' \
+    && dpkg-query -W -f='${Package}\t${Version}\n' \
        > /tmp/packages.unsorted \
     && LC_ALL=C sort /tmp/packages.unsorted > /usr/share/mitosu/packages.txt \
     && rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/* /tmp/* \
@@ -72,6 +72,154 @@ LABEL org.opencontainers.image.title="${IMAGE_ID}" \
       org.opencontainers.image.licenses="Apache-2.0" \
       dev.mitosu.image.id="${IMAGE_ID}" \
       dev.mitosu.profile.revision="1" \
+      dev.mitosu.base.digest="${BASE_IMAGE}" \
+      dev.mitosu.runner.digest="${RUNNER_SOURCE_DIGEST}" \
+      dev.mitosu.lock.digest="${LOCK_DIGEST}"
+
+ENTRYPOINT ["/usr/local/bin/mitosurunner"]
+
+FROM common AS node
+
+ARG BASE_IMAGE
+ARG PROFILE_PACKAGES
+ARG TOOLCHAIN_URL
+ARG TOOLCHAIN_SHA256
+ARG IMAGE_ID
+ARG TARGET_ARCH
+ARG RUNNER_SOURCE_DIGEST
+ARG SOURCE_REVISION
+ARG LOCK_DIGEST
+ARG CREATED
+ARG PROFILE_REVISION
+ARG CAPABILITIES_JSON
+ARG TOOLCHAINS_JSON
+
+USER 0:0
+RUN apt-get update \
+    && apt-get install --assume-yes --no-install-recommends $PROFILE_PACKAGES \
+    && curl --fail --location --proto '=https' --tlsv1.2 \
+       "$TOOLCHAIN_URL" --output /tmp/node.tar.xz \
+    && printf '%s  %s\n' "$TOOLCHAIN_SHA256" /tmp/node.tar.xz | sha256sum --check --strict \
+    && tar --extract --xz --file /tmp/node.tar.xz --directory /usr/local --strip-components 1 \
+    && test "$(node --version)" = v22.22.1 \
+    && test "$(npm --version)" = 10.9.4 \
+    && test "$(corepack --version)" = 0.34.6 \
+    && install -d -m 0750 -o 1000 -g 1000 \
+       /mitosu/workspace /mitosu/home /mitosu/scratch \
+       /var/cache/mitosu/node /var/lib/mitosu/apps/node \
+    && dpkg-query -W -f='${Package}\t${Version}\n' > /tmp/packages.unsorted \
+    && LC_ALL=C sort /tmp/packages.unsorted > /usr/share/mitosu/packages.txt \
+    && rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/* /tmp/*
+
+COPY images/common/write-marker.sh /usr/local/libexec/mitosu-write-marker
+RUN IMAGE_ID="$IMAGE_ID" \
+    DISTRIBUTION=ubuntu \
+    DISTRIBUTION_VERSION=26.04 \
+    TARGET_ARCH="$TARGET_ARCH" \
+    DEVELOPMENT_PROFILE=node \
+    PROFILE_REVISION="$PROFILE_REVISION" \
+    RUNNER_SOURCE_DIGEST="$RUNNER_SOURCE_DIGEST" \
+    SOURCE_REVISION="$SOURCE_REVISION" \
+    LOCK_DIGEST="$LOCK_DIGEST" \
+    CAPABILITIES_JSON="$CAPABILITIES_JSON" \
+    TOOLCHAINS_JSON="$TOOLCHAINS_JSON" \
+    /usr/local/libexec/mitosu-write-marker \
+    && rm -f /usr/local/libexec/mitosu-write-marker
+
+ENV HOME=/home/mitosu \
+    PATH=/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin
+WORKDIR /mitosu/workspace
+USER 1000:1000
+
+LABEL org.opencontainers.image.title="${IMAGE_ID}" \
+      org.opencontainers.image.description="Mitosu Ubuntu 26.04 Node development image" \
+      org.opencontainers.image.created="${CREATED}" \
+      org.opencontainers.image.source="https://github.com/mitosu-cloud/mitosu-runner-os-images" \
+      org.opencontainers.image.revision="${SOURCE_REVISION}" \
+      org.opencontainers.image.licenses="Apache-2.0" \
+      dev.mitosu.image.id="${IMAGE_ID}" \
+      dev.mitosu.profile.revision="${PROFILE_REVISION}" \
+      dev.mitosu.base.digest="${BASE_IMAGE}" \
+      dev.mitosu.runner.digest="${RUNNER_SOURCE_DIGEST}" \
+      dev.mitosu.lock.digest="${LOCK_DIGEST}"
+
+ENTRYPOINT ["/usr/local/bin/mitosurunner"]
+
+FROM common AS python
+
+ARG BASE_IMAGE
+ARG PROFILE_PACKAGES
+ARG PYTHON_SOURCE_URL
+ARG PYTHON_SOURCE_SHA256
+ARG UV_URL
+ARG UV_SHA256
+ARG IMAGE_ID
+ARG TARGET_ARCH
+ARG RUNNER_SOURCE_DIGEST
+ARG SOURCE_REVISION
+ARG LOCK_DIGEST
+ARG CREATED
+ARG PROFILE_REVISION
+ARG CAPABILITIES_JSON
+ARG TOOLCHAINS_JSON
+
+USER 0:0
+RUN apt-get update \
+    && apt-get install --assume-yes --no-install-recommends $PROFILE_PACKAGES \
+    && curl --fail --location --proto '=https' --tlsv1.2 \
+       "$PYTHON_SOURCE_URL" --output /tmp/python.tar.xz \
+    && printf '%s  %s\n' "$PYTHON_SOURCE_SHA256" /tmp/python.tar.xz | sha256sum --check --strict \
+    && mkdir /tmp/python-source \
+    && tar --extract --xz --file /tmp/python.tar.xz --directory /tmp/python-source --strip-components 1 \
+    && cd /tmp/python-source \
+    && ./configure --prefix=/usr/local --with-ensurepip=install \
+    && make -j2 \
+    && make install \
+    && cd / \
+    && ln -sf python3.14 /usr/local/bin/python3 \
+    && curl --fail --location --proto '=https' --tlsv1.2 \
+       "$UV_URL" --output /tmp/uv.tar.gz \
+    && printf '%s  %s\n' "$UV_SHA256" /tmp/uv.tar.gz | sha256sum --check --strict \
+    && mkdir /tmp/uv \
+    && tar --extract --gzip --file /tmp/uv.tar.gz --directory /tmp/uv --strip-components 1 \
+    && install -m 0755 /tmp/uv/uv /tmp/uv/uvx /usr/local/bin/ \
+    && test "$(python3 --version)" = 'Python 3.14.4' \
+    && test "$(uv --version)" = 'uv 0.10.8' \
+    && install -d -m 0750 -o 1000 -g 1000 \
+       /mitosu/workspace /mitosu/home /mitosu/scratch \
+       /var/cache/mitosu/uv /var/lib/mitosu/apps/python \
+    && dpkg-query -W -f='${Package}\t${Version}\n' > /tmp/packages.unsorted \
+    && LC_ALL=C sort /tmp/packages.unsorted > /usr/share/mitosu/packages.txt \
+    && rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/* /tmp/*
+
+COPY images/common/write-marker.sh /usr/local/libexec/mitosu-write-marker
+RUN IMAGE_ID="$IMAGE_ID" \
+    DISTRIBUTION=ubuntu \
+    DISTRIBUTION_VERSION=26.04 \
+    TARGET_ARCH="$TARGET_ARCH" \
+    DEVELOPMENT_PROFILE=python \
+    PROFILE_REVISION="$PROFILE_REVISION" \
+    RUNNER_SOURCE_DIGEST="$RUNNER_SOURCE_DIGEST" \
+    SOURCE_REVISION="$SOURCE_REVISION" \
+    LOCK_DIGEST="$LOCK_DIGEST" \
+    CAPABILITIES_JSON="$CAPABILITIES_JSON" \
+    TOOLCHAINS_JSON="$TOOLCHAINS_JSON" \
+    /usr/local/libexec/mitosu-write-marker \
+    && rm -f /usr/local/libexec/mitosu-write-marker
+
+ENV HOME=/home/mitosu \
+    PATH=/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin
+WORKDIR /mitosu/workspace
+USER 1000:1000
+
+LABEL org.opencontainers.image.title="${IMAGE_ID}" \
+      org.opencontainers.image.description="Mitosu Ubuntu 26.04 Python development image" \
+      org.opencontainers.image.created="${CREATED}" \
+      org.opencontainers.image.source="https://github.com/mitosu-cloud/mitosu-runner-os-images" \
+      org.opencontainers.image.revision="${SOURCE_REVISION}" \
+      org.opencontainers.image.licenses="Apache-2.0" \
+      dev.mitosu.image.id="${IMAGE_ID}" \
+      dev.mitosu.profile.revision="${PROFILE_REVISION}" \
       dev.mitosu.base.digest="${BASE_IMAGE}" \
       dev.mitosu.runner.digest="${RUNNER_SOURCE_DIGEST}" \
       dev.mitosu.lock.digest="${LOCK_DIGEST}"

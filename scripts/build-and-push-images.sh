@@ -11,6 +11,7 @@ source "$SCRIPT_DIR/lib/podman.sh"
 
 repository=ghcr.io/mitosu-cloud/runner-os
 release_tag=
+profile=common
 allow_emulated=false
 dry_run=false
 architectures=()
@@ -29,6 +30,8 @@ Options:
   --repository REPOSITORY    Destination (default: ghcr.io/mitosu-cloud/runner-os)
   --distribution ID          Build one locked distribution; repeat as needed
                              (default: every distribution)
+  --profile common|node|python
+                             Image profile to publish (default: common)
   --architecture ARCH        Build amd64 or arm64; repeat to build both
                              (default: native host architecture)
   --allow-emulated           Permit a non-native architecture build and smoke
@@ -41,9 +44,9 @@ Each architecture is pushed as:
 When both amd64 and arm64 are selected, an OCI index is also pushed as:
   REPOSITORY:IMAGE_ID-TAG
 
-The current Containerfiles implement the Ubuntu and AlmaLinux common images.
-The language-profile images are intentionally excluded until their checked-in
-toolchain locks and Containerfile stages become build-ready.
+Node and Python profiles are currently build-ready for Ubuntu. Other matrix
+profiles and non-Ubuntu language combinations remain fail-closed until their
+checked-in locks and Containerfile stages become build-ready.
 
 The active GitHub CLI token must have read:packages and write:packages access.
 EOF
@@ -64,6 +67,11 @@ while (($# > 0)); do
     --distribution)
       (($# >= 2)) || die '--distribution requires a value'
       requested_distributions+=("$2")
+      shift 2
+      ;;
+    --profile)
+      (($# >= 2)) || die '--profile requires a value'
+      profile=$2
       shift 2
       ;;
     --architecture)
@@ -100,6 +108,10 @@ require_command realpath
   die '--tag must be 1-64 lowercase letters, digits, dots, underscores, or hyphens'
 [[ $repository =~ ^ghcr\.io/[a-z0-9][a-z0-9._-]*/[a-z0-9][a-z0-9._-]*$ ]] ||
   die '--repository must be ghcr.io/OWNER/PACKAGE using lowercase portable names'
+case $profile in
+  common|node|python) ;;
+  *) die "unsupported image profile: $profile" ;;
+esac
 
 "$SCRIPT_DIR/validate-locks.sh" >/dev/null
 
@@ -165,6 +177,15 @@ else
   done
 fi
 
+if [[ $profile != common ]]; then
+  for distribution in "${distributions[@]}"; do
+    [[ $distribution == ubuntu-26.04 ]] ||
+      die "$profile is not build-ready for $distribution"
+    jq -e --arg id "$distribution-$profile" '.images[] | select(.id == $id)' "$matrix" >/dev/null ||
+      die "$profile is not build-ready for $distribution"
+  done
+fi
+
 build_root=$(ensure_build_root)
 release_directory="$build_root/releases/$release_tag-$source_short"
 report_path="$release_directory/push-report.json"
@@ -174,6 +195,7 @@ plan=$(jq -S -n \
   --arg release_tag "$release_tag" \
   --arg source_revision "$source_revision" \
   --arg host_architecture "$host_architecture" \
+  --arg profile "$profile" \
   --argjson architectures "$(printf '%s\n' "${architectures[@]}" | jq -R . | jq -s .)" \
   --argjson distributions "$(printf '%s\n' "${distributions[@]}" | jq -R . | jq -s .)" \
   '{
@@ -182,7 +204,8 @@ plan=$(jq -S -n \
     source_revision: $source_revision,
     host_architecture: $host_architecture,
     architectures: $architectures,
-    images: [$distributions[] | . + "-common"]
+    profile: $profile,
+    images: [$distributions[] | . + "-" + $profile]
   }')
 
 if [[ $dry_run == true ]]; then
@@ -285,7 +308,7 @@ fi
 
 target_tags=()
 for distribution in "${distributions[@]}"; do
-  image_id="$distribution-common"
+  image_id="$distribution-$profile"
   for architecture in "${architectures[@]}"; do
     target_tags+=("$image_id-$release_tag-$architecture")
   done
@@ -306,7 +329,7 @@ logged_in=true
 
 images='[]'
 for distribution in "${distributions[@]}"; do
-  image_id="$distribution-common"
+  image_id="$distribution-$profile"
   local_references=()
   architecture_reports='{}'
 
@@ -314,6 +337,7 @@ for distribution in "${distributions[@]}"; do
     printf 'building %s for linux/%s\n' "$image_id" "$architecture" >&2
     "$SCRIPT_DIR/build-images.sh" \
       --distribution "$distribution" \
+      --profile "$profile" \
       --architecture "$architecture"
 
     local_reference="localhost/mitosu/$image_id:$source_short-$architecture"

@@ -109,6 +109,7 @@ image_id=$(jq -r '.image_id' "$marker_path")
 architecture=$(jq -r '.architecture' "$marker_path")
 source_revision=$(jq -r '.source_revision' "$marker_path")
 profile_revision=$(jq -r '.profile_revision' "$marker_path")
+profile=$(jq -r '.development_profile' "$marker_path")
 runner_source_digest=$(jq -r '.runner_source_digest' "$marker_path")
 marker_lock_digest=$(jq -r '.lock_digest' "$marker_path")
 inspect_architecture=$(jq -r '.[0].Architecture' "$inspect_path")
@@ -122,20 +123,50 @@ label_profile_revision=$(jq -r '.[0].Config.Labels["dev.mitosu.profile.revision"
 label_base_digest=$(jq -r '.[0].Config.Labels["dev.mitosu.base.digest"]' "$inspect_path")
 label_runner_digest=$(jq -r '.[0].Config.Labels["dev.mitosu.runner.digest"]' "$inspect_path")
 label_lock_digest=$(jq -r '.[0].Config.Labels["dev.mitosu.lock.digest"]' "$inspect_path")
+working_directory=$(jq -r '.[0].Config.WorkingDir' "$inspect_path")
 
-distribution_id=${image_id%-common}
+matrix="$REPOSITORY_ROOT/locks/image-matrix.json"
+if [[ $profile == common ]]; then
+  distribution_id=${image_id%-common}
+else
+  image_record=$(jq -c --arg id "$image_id" '.images[] | select(.id == $id)' "$matrix")
+  [[ -n $image_record ]] || die "image does not resolve through the matrix: $image_id"
+  distribution_id=$(jq -r '.distribution' <<<"$image_record")
+  [[ $(jq -r '.profile' <<<"$image_record") == "$profile" ]] ||
+    die 'image profile does not match the matrix'
+fi
 distribution=$(jq -c --arg id "$distribution_id" \
-  '.distributions[] | select(.id == $id)' \
-  "$REPOSITORY_ROOT/locks/image-matrix.json")
+  '.distributions[] | select(.id == $id)' "$matrix")
 [[ -n $distribution ]] || die "image does not resolve to a distribution lock: $image_id"
 family=$(jq -r '.family' <<<"$distribution")
 lock_path=$(jq -r '.os_lock' <<<"$distribution")
 absolute_lock="$REPOSITORY_ROOT/$lock_path"
 expected_base_digest="$(jq -r '.base.repository' "$absolute_lock")@$(jq -r '.base.index_digest' "$absolute_lock")"
 expected_lock_digest="sha256:$(sha256_file "$absolute_lock")"
+profile_lock=
+if [[ $profile != common ]]; then
+  profile_record=$(jq -c --arg id "$profile" '.profiles[] | select(.id == $id)' "$matrix")
+  [[ -n $profile_record ]] || die "marker profile is absent from the matrix: $profile"
+  [[ $(jq -r '.revision' <<<"$profile_record") == "$profile_revision" ]] ||
+    die 'marker profile revision does not match the matrix'
+  profile_lock="$REPOSITORY_ROOT/$(jq -r '.toolchain_lock' <<<"$profile_record")"
+  [[ $(jq -r '.status' "$profile_lock") == locked ]] || die 'marker profile lock is not build-ready'
+  expected_lock_digest="sha256:$(sha256_file "$profile_lock")"
+  jq -e --argjson expected "$(jq -c '.capabilities | sort' <<<"$profile_record")" \
+    '.capabilities | sort == $expected' "$marker_path" >/dev/null ||
+    die 'marker capabilities do not match the profile lock'
+  jq -e --argjson expected "$(jq -cS '.versions' "$profile_lock")" \
+    '.toolchains == $expected' "$marker_path" >/dev/null ||
+    die 'marker toolchains do not match the profile lock'
+fi
 
 [[ $inspect_architecture == "$architecture" ]] || die 'OCI architecture does not match marker'
 [[ $entrypoint == /usr/local/bin/mitosurunner ]] || die 'unexpected OCI entry point'
+if [[ $profile == common ]]; then
+  [[ $working_directory == /workspace ]] || die 'unexpected common-image working directory'
+else
+  [[ $working_directory == /mitosu/workspace ]] || die 'unexpected profile-image working directory'
+fi
 [[ $label_image_id == "$image_id" ]] || die 'OCI image ID label does not match marker'
 [[ $label_title == "$image_id" ]] || die 'OCI title does not match marker'
 [[ $label_source == https://github.com/mitosu-cloud/mitosu-runner-os-images ]] || die 'unexpected OCI source label'
@@ -163,6 +194,14 @@ while IFS= read -r locked_package; do
     die "locked package is absent from image inventory: $locked_package"
 done < <(jq -r --arg architecture "$architecture" '.packages[$architecture][]' "$absolute_lock")
 
+if [[ -n $profile_lock ]]; then
+  while IFS= read -r locked_package; do
+    inventory_entry="${locked_package%%=*}"$'\t'"${locked_package#*=}"
+    grep -Fqx -- "$inventory_entry" "$inventory_path" ||
+      die "locked profile package is absent from image inventory: $locked_package"
+  done < <(jq -r --arg family "$family" '.distribution_packages[$family][]' "$profile_lock")
+fi
+
 host_architecture=$(host_oci_architecture)
 if [[ $host_architecture == "$architecture" ]]; then
   execution=native
@@ -177,6 +216,7 @@ runner_version=$(run_podman run --rm --network none --read-only \
 
 run_podman run --rm --network none --read-only \
   --security-opt no-new-privileges \
+  --user 0:0 \
   --env HOME=/home/mitosu \
   --env HTTP_PROXY= \
   --env HTTPS_PROXY= \
@@ -184,15 +224,19 @@ run_podman run --rm --network none --read-only \
   --env http_proxy= \
   --env https_proxy= \
   --env all_proxy= \
+  --env "EXPECTED_PROFILE=$profile" \
   --entrypoint /bin/bash \
   --tmpfs /home/mitosu:rw,mode=0700 \
   --tmpfs /workspace:rw,mode=0750 \
+  --tmpfs /mitosu/workspace:rw,mode=0750 \
+  --tmpfs /mitosu/home:rw,mode=0750 \
+  --tmpfs /mitosu/scratch:rw,mode=0750 \
   --tmpfs /var/lib/mitosu/apps:rw,mode=0750 \
   --tmpfs /var/cache/mitosu:rw,mode=0750 \
   --tmpfs /run:rw,mode=0755 \
   --tmpfs /tmp:rw,mode=1777 \
   --volume "$REPOSITORY_ROOT/tests/common/smoke.sh:/opt/mitosu-common-smoke:ro" \
   "$image_reference" -c \
-  'chown 1000:1000 /home/mitosu /workspace /var/lib/mitosu/apps /var/cache/mitosu && exec setpriv --reuid=1000 --regid=1000 --init-groups /opt/mitosu-common-smoke'
+  'chown 1000:1000 /home/mitosu /workspace /mitosu/workspace /mitosu/home /mitosu/scratch /var/lib/mitosu/apps /var/cache/mitosu && exec setpriv --reuid=1000 --regid=1000 --init-groups /opt/mitosu-common-smoke'
 
 status=passed

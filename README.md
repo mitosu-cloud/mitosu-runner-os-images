@@ -5,7 +5,7 @@ This repository defines the Linux development root filesystems used by
 images; container and virtual-machine backends consume the same root
 filesystem.
 
-The first release matrix contains Rust, Go, Node.js, and C/C++ development
+The release matrix contains Rust, Go, Node.js, Python, and C/C++ development
 profiles for Ubuntu 26.04 LTS and AlmaLinux 10 on `amd64` and `arm64`.
 
 ## Repository contract
@@ -20,14 +20,12 @@ make test
 make lint
 ```
 
-`make resolve` prints the 16 fully resolved image/architecture combinations as
+`make resolve` prints the 18 fully resolved image/architecture combinations as
 JSON. It does not invoke a container engine or download build inputs.
 
-The checked-in OS and toolchain locks initially have `status: "pending"`.
-They document the lock format but are deliberately not buildable inputs. A
-later phase must replace every pending value with verified digests, versions,
-and checksums before image construction can succeed. No script may silently
-interpret a pending lock as a tag or floating version.
+The OS, runner, Ubuntu Node, and Ubuntu Python inputs are locked. Rust, Go,
+C/C++, and non-Ubuntu language combinations remain pending and fail closed.
+No script may interpret a pending lock as a tag or floating version.
 
 ## Local requirements
 
@@ -48,7 +46,7 @@ staging.
 Podman is invoked with explicit graph root, run root, and temporary directories
 below that build root. It does not use the default container store.
 
-## Common image builds
+## Image builds
 
 The Ubuntu and AlmaLinux OS locks contain dated base-index digests, both
 platform manifest digests, exact requested package versions, and checksums for
@@ -63,6 +61,19 @@ Build one native common image after the runner lock has been resolved:
 ```sh
 make build DISTRIBUTION=ubuntu-26.04
 ```
+
+Build the locked Ubuntu Node or Python profile with:
+
+```sh
+make build DISTRIBUTION=ubuntu-26.04 PROFILE=node
+make build DISTRIBUTION=ubuntu-26.04 PROFILE=python
+```
+
+The Node image installs the checksum-pinned official Node 22.22.1 archive and
+its bundled npm 10.9.4 and Corepack 0.34.6. The Python image builds the
+checksum-pinned Python.org 3.14.4 source and installs checksum-pinned uv 0.10.8.
+Both retain the snapshot-locked native build prerequisites, run as UID/GID
+1000, use `/mitosu/workspace`, and contain no OpenShell policy.
 
 The checked-in runner lock selects the public multi-platform
 `ghcr.io/mitosu-cloud/mitosurunner` image by immutable OCI index digest. Local
@@ -91,6 +102,13 @@ release tag. The default destination is the intended public package
 make publish RELEASE_TAG=v0.1.0
 ```
 
+Select one protected language profile and distribution explicitly:
+
+```sh
+make publish RELEASE_TAG=v0.1.0-node DISTRIBUTION=ubuntu-26.04 PROFILE=node
+make publish RELEASE_TAG=v0.1.0-python DISTRIBUTION=ubuntu-26.04 PROFILE=python
+```
+
 The native host architecture is selected by default. To intentionally build
 both architectures with emulation available, invoke the script directly:
 
@@ -111,9 +129,9 @@ The script authenticates to GHCR with the current `gh` session, refuses to
 overwrite an existing release tag, verifies every image before pushing, and
 writes immutable references and registry digests beneath
 `/tmp/mitosu-runner-os-images/releases/`. The current buildable set is the
-Ubuntu and AlmaLinux common images. The eight language-profile images remain
-excluded until their pending toolchain locks and Containerfile stages are
-implemented.
+Ubuntu and AlmaLinux common images plus Ubuntu Node and Python. Other
+language-profile combinations remain excluded until their toolchain locks and
+Containerfile stages are implemented.
 
 The active `gh` token needs `read:packages` and `write:packages`. GitHub creates
 a package pushed from the command line as private by default; after the first
@@ -131,9 +149,23 @@ and temporary inspection data also remain beneath
 ## Signed runtime-pack handoff
 
 The repository can assemble and verify the exact runtime-pack format consumed
-by `mitosuagent`. A pack binds the selected kernel and runner bytes plus
-digest-pinned initfs and tool-image references. Generation and signing are
-separate so a build job never needs the protected release key:
+by `mitosuagent`. The general assembler accepts any declared runtime artifact,
+including `openshell_driver_vm`, and a JSON array of digest-pinned OCI images.
+Each ACP workload image may carry the signed marker attestation enforced by the
+agent. Generation and signing are separate so a build job never needs the
+protected release key:
+
+```sh
+make assemble-runtime-pack \
+  PACK_ID=openshell-2026.10-linux-x86_64 \
+  TARGET_OS=linux \
+  TARGET_ARCH=x86_64 \
+  OCI_IMAGES=/absolute/path/to/oci-images.json \
+  ARTIFACT_ARGS='--artifact openshell_driver_vm /absolute/path/to/openshell-driver-vm bin/openshell-driver-vm true'
+```
+
+The older Apple Containerization pack generator remains available for
+historical releases:
 
 ```sh
 make runtime-pack \
@@ -157,8 +189,14 @@ Signing writes `release-handoff.json`. That file supplies the three values a
 trusted `mitosuagent` configuration needs: the HTTPS source URL or absolute
 directory path, the SHA-256 of the exact `manifest.json` bytes, and the
 lowercase-hex 32-byte Ed25519 public key. The private key is never copied into
-the pack. See the [release policy](docs/release.md) for publication gates and
-key handling.
+the pack. The protected `runtime-pack-release.yml` workflow accepts a
+checksum-pinned unsigned archive rooted at `pack/`, validates the required VM
+driver and attested Ubuntu Node/Python images, verifies GitHub provenance for
+every OCI digest, signs with the protected environment key, checks the derived
+public key against the source-controlled pin, attests the release files through
+GitHub OIDC, and publishes an immutable-tagged GitHub release. See the
+[release policy](docs/release.md) for environment setup, publication gates,
+and key handling.
 
 See [architecture](docs/architecture.md),
 [adding an image](docs/adding-an-image.md), and
