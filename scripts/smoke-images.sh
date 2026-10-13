@@ -216,6 +216,7 @@ runner_version=$(run_podman run --rm --network none --read-only \
 
 run_podman run --rm --network none --read-only \
   --security-opt no-new-privileges \
+  --user 0:0 \
   --env HOME=/home/mitosu \
   --env HTTP_PROXY= \
   --env HTTPS_PROXY= \
