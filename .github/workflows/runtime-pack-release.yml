@@ -75,13 +75,6 @@ jobs:
           ref: ${{ inputs.source_sha }}
           persist-credentials: false
 
-      - name: Require immutable GitHub releases
-        run: |
-          test "$(gh api \
-            -H 'X-GitHub-Api-Version: 2026-03-10' \
-            "repos/$GITHUB_REPOSITORY/immutable-releases" \
-            --jq .enabled)" = true
-
       - name: Verify source and install validation tools
         env:
           SOURCE_SHA: ${{ inputs.source_sha }}
@@ -355,6 +348,10 @@ jobs:
             "$RELEASE_DIR/SHA256SUMS" \
             "$RELEASE_DIR/release-handoff.json" \
             "$RELEASE_DIR/ed25519-public-key.hex"
+          test "$(gh release view "$RELEASE_TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --json isImmutable \
+            --jq .isImmutable)" = true
 
       - name: Remove transient workflow artifacts
         if: success()
