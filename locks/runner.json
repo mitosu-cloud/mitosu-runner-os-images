@@ -2,6 +2,6 @@
   "schema_version": 1,
   "status": "locked",
   "repository": "ghcr.io/mitosu-cloud/mitosurunner",
-  "index_digest": "sha256:32226e46a1890dcbd5d64bc7d723913e945a20a01ec1eed2435b213e5cde8dd8",
+  "index_digest": "sha256:a8297d30ff0eed703e28664bac75fd9f99bfc6378f233c69925efd7078619561",
   "binary_path": "/usr/local/bin/mitosurunner"
 }
