@@ -57,6 +57,13 @@ valid runtime-pack base URL for the current fail-closed consumer. A release
 archive may instead be downloaded separately, verified, and extracted to an
 installer-owned absolute directory.
 
+Official packs use GitHub Pages at the canonical source URL
+`https://mitosu-cloud.github.io/mitosu-runner-os-images/runtime-packs/<pack_id>/`.
+The protected workflow publishes the unpacked signed files there, downloads
+every file again with redirects disabled, and compares the bytes before it
+creates the immutable GitHub release. The Pages site contains the current pack;
+the immutable release archive remains the durable audit and recovery copy.
+
 ## Protected release environment
 
 Create a GitHub environment named `runtime-release` in this public repository.
@@ -70,6 +77,10 @@ secret:
 
 - environment secret `MITOSU_RUNTIME_PACK_SIGNING_KEY_PEM`, containing one
   persistent Ed25519 private key in PEM form.
+
+Enable GitHub Pages with GitHub Actions as its build source. The deployment job
+uses the `github-pages` environment and receives only `pages: write` and OIDC
+permissions; it never receives the runtime-pack signing secret.
 
 The corresponding raw 32-byte public key is checked in as 64 lowercase
 hexadecimal characters at `release/runtime-pack-ed25519-public-key.hex`. Changing
@@ -123,7 +134,7 @@ sha256sum candidate.tar.gz
 
 Dispatch `.github/workflows/runtime-pack-release.yml` with the exact source
 SHA, `runtime-pack-<pack_id>` release tag, HTTPS candidate URL, candidate
-SHA-256, and the final direct HTTPS directory URL for the unpacked signed
+SHA-256, and the canonical GitHub Pages directory URL for the unpacked signed
 files. Candidate validation runs without the signing secret. It rejects path
 traversal, links, special files, undeclared files, size or mode mismatches,
 mutable or local OCI references, missing `openshell_driver_vm`, missing
@@ -132,11 +143,12 @@ OpenShell control images, and missing attested `ubuntu-26.04-node` or
 
 The protected job downloads the validated candidate through the Actions
 artifact boundary, rechecks the original SHA-256, re-extracts and validates it,
-signs it, creates deterministic release files, generates OIDC provenance, and
-creates the GitHub release. It refuses an existing release tag. The GitHub
-release archive is a transport artifact; deploy the unpacked signed files to
-the approved `source_base_url`, or install the archive into a trusted absolute
-directory and configure that directory in the agent.
+signs it, and creates deterministic release files. A separate Pages job then
+publishes the unpacked pack without access to the signing key. The final job
+requires byte-identical no-redirect downloads from the signed
+`source_base_url`, generates OIDC provenance, creates the immutable GitHub
+release, and removes the transient candidate and Pages workflow artifacts. It
+refuses an existing release tag.
 
 ## Publication gates
 
@@ -152,8 +164,6 @@ The signed release job must stop unless all of the following are available:
    key, required reviewers, and approved rotation plan; and
 6. a direct HTTPS directory host or an installer-owned absolute directory.
 
-The workflow implements these gates but does not claim a production release
-exists. Ubuntu Node and Python profile locks and Containerfile stages are
-implemented. Publishing both architectures with native smoke evidence,
-publishing the rebuilt OpenShell inputs and VM driver, and final direct-directory
-deployment remain required before dispatching an official pack release.
+The workflow implements these gates but does not by itself claim a production
+release exists. Each release record must identify the exact image, driver,
+manifest, hosting, and qualification evidence produced by the successful run.
