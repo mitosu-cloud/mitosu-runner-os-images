@@ -214,6 +214,30 @@ runner_version=$(run_podman run --rm --network none --read-only \
   --tmpfs /tmp:rw,mode=1777 \
   "$image_reference" --version)
 
+case $profile in
+  node)
+    acp_application_root=/var/lib/mitosu/apps/claude
+    acp_package_cache_root=/var/cache/mitosu/node/claude
+    ;;
+  python)
+    acp_application_root=/var/lib/mitosu/apps/fast-agent
+    acp_package_cache_root=/var/cache/mitosu/uv/fast-agent
+    ;;
+  *)
+    acp_application_root=
+    acp_package_cache_root=
+    ;;
+esac
+if [[ -n $acp_application_root ]]; then
+  run_podman run --rm --network none --read-only \
+    --user 1000:1000 \
+    --env "ACP_APPLICATION_ROOT=$acp_application_root" \
+    --env "ACP_PACKAGE_CACHE_ROOT=$acp_package_cache_root" \
+    --entrypoint /bin/bash \
+    "$image_reference" -c \
+    'test "$(stat -c "%u:%g:%a" "$ACP_APPLICATION_ROOT")" = 1000:1000:750 && test "$(stat -c "%u:%g:%a" "$ACP_PACKAGE_CACHE_ROOT")" = 1000:1000:750'
+fi
+
 run_podman run --rm --network none --read-only \
   --security-opt no-new-privileges \
   --user 0:0 \

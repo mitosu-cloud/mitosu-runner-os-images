@@ -111,7 +111,8 @@ RUN apt-get update \
     && test "$(corepack --version)" = 0.34.6 \
     && install -d -m 0750 -o 1000 -g 1000 \
        /mitosu/workspace /mitosu/home /mitosu/scratch \
-       /var/cache/mitosu/node /var/lib/mitosu/apps/node \
+       /var/cache/mitosu/node /var/cache/mitosu/node/claude \
+       /var/lib/mitosu/apps/node /var/lib/mitosu/apps/claude \
     && dpkg-query -W -f='${Package}\t${Version}\n' > /tmp/packages.unsorted \
     && LC_ALL=C sort /tmp/packages.unsorted > /usr/share/mitosu/packages.txt \
     && rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/* /tmp/*
@@ -192,7 +193,8 @@ RUN apt-get update \
     && test "$(uv --version)" = 'uv 0.10.8' \
     && install -d -m 0750 -o 1000 -g 1000 \
        /mitosu/workspace /mitosu/home /mitosu/scratch \
-       /var/cache/mitosu/uv /var/lib/mitosu/apps/python \
+       /var/cache/mitosu/uv /var/cache/mitosu/uv/fast-agent \
+       /var/lib/mitosu/apps/python /var/lib/mitosu/apps/fast-agent \
     && dpkg-query -W -f='${Package}\t${Version}\n' > /tmp/packages.unsorted \
     && LC_ALL=C sort /tmp/packages.unsorted > /usr/share/mitosu/packages.txt \
     && rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/* /tmp/*
