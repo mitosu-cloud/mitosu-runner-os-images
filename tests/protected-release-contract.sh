@@ -132,6 +132,30 @@ if "$REPOSITORY_ROOT/scripts/extract-runtime-pack-candidate.py" \
   fail 'candidate extractor accepted a symlink'
 fi
 pass 'candidate extractor rejects links and special archive members'
+mkdir -p "$staging/mock-bin"
+cat >"$staging/mock-bin/gh" <<'MOCK'
+#!/usr/bin/env bash
+if [[ "$*" == *'--jq .size'* ]]; then
+  printf '17\n'
+else
+  printf 'candidate fixture'
+fi
+MOCK
+chmod 0755 "$staging/mock-bin/gh"
+GITHUB_REPOSITORY=mitosu-cloud/mitosu-runner-os-images PATH="$staging/mock-bin:$PATH" \
+  "$REPOSITORY_ROOT/scripts/download-runtime-pack-candidate.sh" \
+    https://api.github.com/repos/mitosu-cloud/mitosu-runner-os-images/releases/assets/123 \
+    "$staging/downloaded-candidate"
+[[ $(<"$staging/downloaded-candidate") == 'candidate fixture' ]] || fail 'draft candidate bytes changed'
+if GITHUB_REPOSITORY=mitosu-cloud/mitosu-runner-os-images PATH="$staging/mock-bin:$PATH" \
+  "$REPOSITORY_ROOT/scripts/download-runtime-pack-candidate.sh" \
+    https://api.github.com/repos/mitosu-cloud/mitosu-runner-os-images/releases/assets/123/extra \
+    "$staging/invalid-candidate" >/dev/null 2>&1; then
+  fail 'draft candidate downloader accepted a malformed asset ID'
+fi
+[[ ! -e $staging/invalid-candidate ]] || fail 'failed candidate download retained output'
+pass 'draft candidate staging authenticates only exact same-repository GitHub asset URLs'
+
 
 openssl genpkey -algorithm ED25519 -out "$staging/pages-signing-key.pem" 2>/dev/null
 prior_pack="$staging/prior-pack"
