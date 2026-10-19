@@ -139,6 +139,16 @@ tar -C /path/to/parent -czf candidate.tar.gz pack
 sha256sum candidate.tar.gz
 ```
 
+To keep candidate staging on GitHub, upload that archive to a **draft** release
+and pass its API asset URL,
+`https://api.github.com/repos/mitosu-cloud/mitosu-runner-os-images/releases/assets/ASSET_ID`.
+The validation job uses its existing read-only `GH_TOKEN` through `gh api` only
+for an exact same-repository asset URL, checks the declared and downloaded
+lengths, then checks the separately pinned candidate SHA-256. Credentials do
+not enter argv or generic-origin requests. Other HTTPS candidate sources remain
+credential-free. The draft need not be published or made immutable; retain it
+on failure and remove it after the final runtime release succeeds.
+
 Dispatch `.github/workflows/runtime-pack-release.yml` with the exact source
 SHA, `runtime-pack-<pack_id>` release tag, HTTPS candidate URL, candidate
 SHA-256, and the explicit GitHub Release download directory URL for that tag.

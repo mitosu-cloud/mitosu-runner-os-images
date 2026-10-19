@@ -12,7 +12,7 @@ on:
         required: true
         type: string
       candidate_url:
-        description: HTTPS URL of an unsigned tar archive rooted at pack/
+        description: HTTPS unsigned pack archive, or same-repository GitHub draft asset API URL
         required: true
         type: string
       candidate_sha256:
@@ -94,10 +94,7 @@ jobs:
         run: |
           install -d -m 0700 "$MITOSU_BUILD_ROOT/release-input"
           candidate="$MITOSU_BUILD_ROOT/release-input/candidate.tar"
-          curl --fail --location --proto '=https' --proto-redir '=https' --tlsv1.2 \
-            --max-filesize 34360786944 \
-            --output "$candidate" \
-            "$CANDIDATE_URL"
+          ./scripts/download-runtime-pack-candidate.sh "$CANDIDATE_URL" "$candidate"
           printf '%s  %s\n' "$CANDIDATE_SHA256" "$candidate" | sha256sum --check --strict
           ./scripts/extract-runtime-pack-candidate.py \
             "$candidate" "$MITOSU_BUILD_ROOT/release-input/extracted"
