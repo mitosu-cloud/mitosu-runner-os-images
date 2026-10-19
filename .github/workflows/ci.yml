@@ -31,7 +31,7 @@ jobs:
       - name: Install validation tools
         run: |
           sudo apt-get update
-          sudo apt-get install --yes jq python3-jsonschema shellcheck
+          sudo apt-get install --yes jq python3-jsonschema shellcheck zstd
 
       - name: Record tool versions
         run: |

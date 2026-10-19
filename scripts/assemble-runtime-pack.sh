@@ -15,13 +15,15 @@ usage: assemble-runtime-pack.sh \
   --target-os linux|macos|windows \
   --target-arch aarch64|x86_64 \
   --oci-images JSON-FILE \
+  [--compression zstd] \
   --artifact NAME SOURCE RELATIVE-PATH EXECUTABLE \
   [--artifact NAME SOURCE RELATIVE-PATH EXECUTABLE ...]
 
 Creates an unsigned runtime pack from exact local artifact bytes and a JSON
 array of digest-pinned OCI image entries. EXECUTABLE must be true or false.
 Schema version 2 is selected when both required OpenShell runtime images are
-present; supplying only one is rejected.
+present; supplying only one is rejected. --compression zstd selects schema 3
+and emits flat compressed source files with signed expanded-file identities.
 
 The output directory must not exist and must be beneath MITOSU_BUILD_ROOT.
 EOF
@@ -32,6 +34,7 @@ pack_id=
 target_os=
 target_arch=
 oci_images_file=
+compression=
 artifact_names=()
 artifact_sources=()
 artifact_paths=()
@@ -71,6 +74,12 @@ while (($# > 0)); do
       artifact_paths+=("$4")
       artifact_executables+=("$5")
       shift 5
+      ;;
+    --compression)
+      (($# >= 2)) || die '--compression requires a value'
+      [[ $2 == zstd ]] || die 'only zstd transport compression is supported'
+      compression=$2
+      shift 2
       ;;
     -h | --help)
       usage
@@ -152,6 +161,10 @@ elif [[ $supervisor_count -eq 0 && $sandbox_count -eq 0 ]]; then
 else
   die 'OpenShell supervisor and sandbox runtime images must be supplied together'
 fi
+if [[ $compression == zstd ]]; then
+  require_command zstd
+  schema_version=3
+fi
 
 created_output=false
 cleanup() {
@@ -169,16 +182,30 @@ for index in "${!artifact_names[@]}"; do
   source_path=${artifact_sources[$index]}
   relative_path=${artifact_paths[$index]}
   executable=${artifact_executables[$index]}
-  destination="$output/$relative_path"
-  install -d -m 0700 -- "$(dirname -- "$destination")"
-  if [[ $executable == true ]]; then
-    install -m 0555 -- "$source_path" "$destination"
-  else
-    install -m 0444 -- "$source_path" "$destination"
-  fi
-  size=$(wc -c <"$destination")
+  size=$(wc -c <"$source_path")
   size=${size//[[:space:]]/}
-  digest=$(sha256_file "$destination")
+  digest=$(sha256_file "$source_path")
+  transport=null
+  if [[ $compression == zstd ]]; then
+    # Release assets use a flat namespace; expanded cache paths stay unchanged.
+    transport_path="$name.zst"
+    destination="$output/$transport_path"
+    zstd -3 -T1 --quiet --stdout -- "$source_path" >"$destination"
+    chmod 0444 -- "$destination"
+    transport_size=$(wc -c <"$destination")
+    transport_size=${transport_size//[[:space:]]/}
+    transport=$(jq -cn --arg path "$transport_path" --argjson size "$transport_size" \
+      --arg sha256 "$(sha256_file "$destination")" \
+      '{compression: "zstd", path: $path, size: $size, sha256: $sha256}')
+  else
+    destination="$output/$relative_path"
+    install -d -m 0700 -- "$(dirname -- "$destination")"
+    if [[ $executable == true ]]; then
+      install -m 0555 -- "$source_path" "$destination"
+    else
+      install -m 0444 -- "$source_path" "$destination"
+    fi
+  fi
   artifacts=$(jq -cn \
     --argjson current "$artifacts" \
     --arg name "$name" \
@@ -186,7 +213,9 @@ for index in "${!artifact_names[@]}"; do
     --argjson size "$size" \
     --arg sha256 "$digest" \
     --argjson executable "$executable" \
-    '$current + [{name: $name, path: $path, size: $size, sha256: $sha256, executable: $executable}]')
+    --argjson transport "$transport" \
+    '$current + [{name: $name, path: $path, size: $size, sha256: $sha256, executable: $executable}
+      + (if $transport == null then {} else {transport: $transport} end)]')
 done
 
 manifest_staging="$output/.manifest.json.tmp"

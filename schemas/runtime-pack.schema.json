@@ -13,7 +13,7 @@
     "oci_images"
   ],
   "properties": {
-    "schema_version": { "enum": [1, 2] },
+    "schema_version": { "enum": [1, 2, 3] },
     "pack_id": {
       "type": "string",
       "minLength": 1,
@@ -35,6 +35,10 @@
     }
   },
   "allOf": [
+    {
+      "if": {"properties": {"schema_version": {"enum": [1, 2]}}},
+      "then": {"properties": {"artifacts": {"items": {"not": {"required": ["transport"]}}}}}
+    },
     {
       "if": {
         "properties": { "schema_version": { "const": 2 } },
@@ -98,7 +102,19 @@
           "maximum": 17179869184
         },
         "sha256": { "$ref": "#/definitions/sha256" },
-        "executable": { "type": "boolean" }
+        "executable": { "type": "boolean" },
+        "transport": { "$ref": "#/definitions/transport" }
+      }
+    },
+    "transport": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["compression", "path", "size", "sha256"],
+      "properties": {
+        "compression": {"const": "zstd"},
+        "path": {"$ref": "#/definitions/portablePath"},
+        "size": {"type": "integer", "minimum": 1, "maximum": 17179869184},
+        "sha256": {"$ref": "#/definitions/sha256"}
       }
     },
     "ociImage": {

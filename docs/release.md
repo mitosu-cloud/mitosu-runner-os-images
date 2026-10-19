@@ -51,18 +51,29 @@ The runtime-pack scripts implement the byte-level contract consumed by
 }
 ```
 
-An HTTPS source must be a direct directory endpoint that returns pack files
-without redirects. GitHub release asset URLs redirect and therefore are not a
-valid runtime-pack base URL for the current fail-closed consumer. A release
-archive may instead be downloaded separately, verified, and extracted to an
-installer-owned absolute directory.
+Official new packs use an explicit GitHub Release download directory:
+`https://github.com/mitosu-cloud/mitosu-runner-os-images/releases/download/runtime-pack-<pack_id>/`.
+Schema 3 preserves each installed artifact's path, size, SHA-256 and executable
+bit and adds signed `transport` metadata: `compression: zstd`, flat source path,
+compressed size and compressed SHA-256. Build with `--compression zstd` in
+`scripts/assemble-runtime-pack.sh`. The source pack contains the compressed
+payloads only; verification checks both representations. Each release asset
+must be below GitHub's 2 GiB per-file limit.
 
-Official packs use GitHub Pages at the canonical source URL
-`https://mitosu-cloud.github.io/mitosu-runner-os-images/runtime-packs/<pack_id>/`.
-The protected workflow publishes the unpacked signed files there, downloads
-every file again with redirects disabled, and compares the bytes before it
-creates the immutable GitHub release. The Pages site contains the current pack;
-the immutable release archive remains the durable audit and recovery copy.
+The agent authenticates transport bytes before bounded in-process expansion,
+then verifies expanded bytes before atomic publication. Its storage admission
+covers all expanded files plus the largest temporary compressed file and
+metadata. Expansion accepts one zstd frame and a window no larger than 64 MiB.
+No decompressor executable or resident service is needed on the agent machine.
+
+GitHub public downloads may follow at most three HTTPS redirects, exclusively
+to `release-assets.githubusercontent.com` or `objects.githubusercontent.com`.
+Credentials, custom ports, login destinations, mutable `latest` aliases and
+other redirect hosts are refused. Generic HTTPS directories keep redirects
+disabled. Public consumers require no GitHub token. Existing schema 1/2 raw
+packs and installer-owned absolute directories remain supported. Historical
+Pages deployments remain untouched by this workflow; keep them available for
+already-pinned configurations.
 
 ## Protected release environment
 
@@ -77,10 +88,6 @@ secret:
 
 - environment secret `MITOSU_RUNTIME_PACK_SIGNING_KEY_PEM`, containing one
   persistent Ed25519 private key in PEM form.
-
-Enable GitHub Pages with GitHub Actions as its build source. The deployment job
-uses the `github-pages` environment and receives only `pages: write` and OIDC
-permissions; it never receives the runtime-pack signing secret.
 
 The corresponding raw 32-byte public key is checked in as 64 lowercase
 hexadecimal characters at `release/runtime-pack-ed25519-public-key.hex`. Changing
@@ -108,8 +115,8 @@ candidate-validation job, or used by the image publication job. The protected
 signing job writes it to a mode-`0600` temporary file, unsets the environment
 value, signs after all manifest bytes are final, checks the derived public key
 against the source-controlled public-key pin, and removes the file before
-packaging. Public outputs contain only `ed25519-public-key.hex`,
-`manifest.sig`, `release-handoff.json`, and the signed pack archive.
+packaging. Public outputs contain only `manifest.json`, `ed25519-public-key.hex`,
+`manifest.sig`, `release-handoff.json`, compressed payloads and `SHA256SUMS`.
 
 Establishing or rotating the official key requires an application release
 decision because each deployed runtime-pack configuration pins both the public
@@ -134,8 +141,10 @@ sha256sum candidate.tar.gz
 
 Dispatch `.github/workflows/runtime-pack-release.yml` with the exact source
 SHA, `runtime-pack-<pack_id>` release tag, HTTPS candidate URL, candidate
-SHA-256, and the canonical GitHub Pages directory URL for the unpacked signed
-files. Candidate validation runs without the signing secret. It rejects path
+SHA-256, and the explicit GitHub Release download directory URL for that tag.
+The protected workflow requires schema 3, compressed flat source paths and
+individual payloads below 2 GiB. Candidate validation runs without the signing
+secret. It rejects path
 traversal, links, special files, undeclared files, size or mode mismatches,
 mutable or local OCI references, missing `openshell_driver_vm`, missing
 OpenShell control images, and missing attested `ubuntu-26.04-node` or
@@ -143,12 +152,16 @@ OpenShell control images, and missing attested `ubuntu-26.04-node` or
 
 The protected job downloads the validated candidate through the Actions
 artifact boundary, rechecks the original SHA-256, re-extracts and validates it,
-signs it, and creates deterministic release files. A separate Pages job then
-publishes the unpacked pack without access to the signing key. The final job
-requires byte-identical no-redirect downloads from the signed
-`source_base_url`, generates OIDC provenance, creates the immutable GitHub
-release, and removes the transient candidate and Pages workflow artifacts. It
-refuses an existing release tag.
+signs it, and stages the exact signed manifest, signature, public handoff and
+compressed payloads. The final job rechecks the source-controlled trust pin,
+attests each release file, uploads a draft, independently downloads and compares
+all draft assets, then publishes and checks `isImmutable`. It verifies every
+public asset again without GitHub credentials using bounded HTTPS-only GitHub
+asset redirects. Only a successful result removes the transient candidate and
+signed-output Actions artifacts. Existing tags are refused; an interrupted
+draft is retained for inspection and is not silently overwritten. A public
+verification failure leaves the immutable release and failed workflow as
+evidence; it does not claim successful installation qualification.
 
 ## Publication gates
 
@@ -162,7 +175,8 @@ The signed release job must stop unless all of the following are available:
    target;
 5. the protected Ed25519 environment secret, matching source-controlled public
    key, required reviewers, and approved rotation plan; and
-6. a direct HTTPS directory host or an installer-owned absolute directory.
+6. compressed GitHub Release asset delivery verified anonymously, or an
+   installer-owned absolute directory for explicitly local installation.
 
 The workflow implements these gates but does not by itself claim a production
 release exists. Each release record must identify the exact image, driver,

@@ -20,7 +20,7 @@ on:
         required: true
         type: string
       source_base_url:
-        description: Direct HTTPS directory URL where unpacked signed files will be hosted
+        description: GitHub Release download directory for the immutable release tag
         required: true
         type: string
 
@@ -66,7 +66,7 @@ jobs:
             [[ -n "$authority" && "$authority" != *@* ]]
           done
           [[ "$SOURCE_BASE_URL" == */ ]]
-          expected_source="https://mitosu-cloud.github.io/mitosu-runner-os-images/runtime-packs/${RELEASE_TAG#runtime-pack-}/"
+          expected_source="https://github.com/$GITHUB_REPOSITORY/releases/download/$RELEASE_TAG/"
           test "$SOURCE_BASE_URL" = "$expected_source"
 
       - name: Check out exact source revision
@@ -81,7 +81,7 @@ jobs:
         run: |
           test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
           sudo apt-get update
-          sudo apt-get install --yes jq python3-jsonschema shellcheck
+          sudo apt-get install --yes jq python3-jsonschema shellcheck zstd
           make test
           make lint
 
@@ -102,7 +102,7 @@ jobs:
           ./scripts/extract-runtime-pack-candidate.py \
             "$candidate" "$MITOSU_BUILD_ROOT/release-input/extracted"
           pack="$MITOSU_BUILD_ROOT/release-input/extracted/pack"
-          ./scripts/validate-production-runtime-pack.sh --pack-dir "$pack"
+          ./scripts/validate-production-runtime-pack.sh --pack-dir "$pack" --github-release
           pack_id=$(jq -er '.pack_id' "$pack/manifest.json")
           test "$RELEASE_TAG" = "runtime-pack-$pack_id"
           printf 'pack_id=%s\n' "$pack_id" >> "$GITHUB_OUTPUT"
@@ -153,7 +153,7 @@ jobs:
         run: |
           test "$(git rev-parse HEAD)" = "${{ inputs.source_sha }}"
           sudo apt-get update
-          sudo apt-get install --yes jq python3-jsonschema
+          sudo apt-get install --yes jq python3-jsonschema zstd
 
       - name: Download validated candidate
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
@@ -178,7 +178,7 @@ jobs:
           ./scripts/extract-runtime-pack-candidate.py \
             "$candidate" "$MITOSU_BUILD_ROOT/release-input/extracted"
           pack="$MITOSU_BUILD_ROOT/release-input/extracted/pack"
-          ./scripts/validate-production-runtime-pack.sh --pack-dir "$pack" >/dev/null
+          ./scripts/validate-production-runtime-pack.sh --pack-dir "$pack" --github-release >/dev/null
           test "$(jq -er '.pack_id' "$pack/manifest.json")" = "$PACK_ID"
 
           key_file="$RUNNER_TEMP/runtime-pack-signing-key.pem"
@@ -201,52 +201,15 @@ jobs:
 
           release_dir="$MITOSU_BUILD_ROOT/release-output"
           install -d -m 0700 "$release_dir"
-          archive="$release_dir/$RELEASE_TAG.tar.gz"
-          source_date_epoch=$(git show -s --format=%ct HEAD)
-          tar --sort=name \
-            --mtime="@$source_date_epoch" \
-            --owner=0 --group=0 --numeric-owner \
-            -C "$(dirname -- "$pack")" \
-            -czf "$archive" pack
-          cp -- "$pack/release-handoff.json" "$release_dir/release-handoff.json"
-          cp -- "$pack/ed25519-public-key.hex" "$release_dir/ed25519-public-key.hex"
+          # The signed source inventory is already compressed and flat.
+          cp -- "$pack/"* "$release_dir/"
           (
             cd "$release_dir"
-            sha256sum -- \
-              "$RELEASE_TAG.tar.gz" \
-              release-handoff.json \
-              ed25519-public-key.hex > SHA256SUMS
+            sha256sum -- * > SHA256SUMS
           )
-
-          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            printf 'error: release already exists: %s\n' "$RELEASE_TAG" >&2
-            exit 1
-          fi
-          prior_releases="$MITOSU_BUILD_ROOT/prior-runtime-pack-releases"
-          install -d -m 0700 "$prior_releases"
-          while IFS= read -r prior_tag; do
-            [[ $prior_tag == runtime-pack-* ]] || continue
-            [[ $prior_tag =~ ^runtime-pack-[a-z0-9][a-z0-9._-]{0,127}$ ]]
-            test "$(gh release view "$prior_tag" \
-              --repo "$GITHUB_REPOSITORY" \
-              --json isImmutable \
-              --jq .isImmutable)" = true
-            prior_dir="$prior_releases/$prior_tag"
-            install -d -m 0700 "$prior_dir"
-            gh release download "$prior_tag" \
-              --repo "$GITHUB_REPOSITORY" \
-              --pattern "$prior_tag.tar.gz" \
-              --pattern SHA256SUMS \
-              --dir "$prior_dir"
-          done < <(
-            gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
-              --jq '.[].tag_name'
-          )
-          ./scripts/stage-runtime-pack-pages.sh \
-            --site-dir "$MITOSU_BUILD_ROOT/pages-site" \
-            --current-pack "$pack" \
-            --prior-releases-dir "$prior_releases" \
-            --public-key "$expected_public_key" >/dev/null
+          while IFS= read -r -d '' asset; do
+            test "$(stat -c %s "$asset")" -lt 2147483648
+          done < <(find "$release_dir" -maxdepth 1 -type f -print0)
 
       - name: Upload signed release bundle
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -256,33 +219,9 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-      - name: Upload direct-download Pages artifact
-        uses: actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b # v4
-        with:
-          path: /tmp/mitosu-runner-os-images/pages-site
-
-  deploy-runtime-pack:
-    name: Publish direct runtime-pack directory
-    needs: sign-runtime-pack
-    runs-on: ubuntu-24.04
-    timeout-minutes: 15
-    permissions:
-      id-token: write
-      pages: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - name: Configure GitHub Pages
-        uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5
-
-      - name: Deploy exact signed pack
-        id: deployment
-        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4
-
   publish-release:
-    name: Verify hosting, attest, and publish release
-    needs: [validate-candidate, sign-runtime-pack, deploy-runtime-pack]
+    name: Attest, publish, and verify immutable GitHub assets
+    needs: [validate-candidate, sign-runtime-pack]
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
@@ -300,40 +239,22 @@ jobs:
           name: ${{ inputs.release_tag }}
           path: /tmp/mitosu-runner-os-images/release-output
 
-      - name: Verify direct no-redirect publication
-        env:
-          RELEASE_TAG: ${{ inputs.release_tag }}
-          SOURCE_BASE_URL: ${{ inputs.source_base_url }}
+      - name: Check out exact source revision
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.source_sha }}
+          persist-credentials: false
+
+      - name: Reverify signed release bytes
         run: |
-          install -d -m 0700 "$RUNNER_TEMP/release-pack" "$RUNNER_TEMP/remote-pack"
-          tar -xzf "$RELEASE_DIR/$RELEASE_TAG.tar.gz" -C "$RUNNER_TEMP/release-pack"
-          pack="$RUNNER_TEMP/release-pack/pack"
-          test "$(jq -er '.source.base_url' "$pack/release-handoff.json")" = "$SOURCE_BASE_URL"
-          mapfile -t paths < <(
-            {
-              printf '%s\n' manifest.json manifest.sig ed25519-public-key.hex release-handoff.json
-              jq -er '.artifacts[].path' "$pack/manifest.json"
-            } | LC_ALL=C sort -u
-          )
-          for path in "${paths[@]}"; do
-            remote="$RUNNER_TEMP/remote-pack/$path"
-            mkdir -p "$(dirname "$remote")"
-            published=false
-            for _attempt in {1..12}; do
-              if curl --fail --silent --show-error \
-                  --proto '=https' --tlsv1.2 --max-redirs 0 \
-                  --output "$remote" "$SOURCE_BASE_URL$path" \
-                  && cmp --silent "$pack/$path" "$remote"; then
-                published=true
-                break
-              fi
-              sleep 5
-            done
-            [[ "$published" == true ]] || {
-              printf 'published file is unavailable or changed: %s\n' "$path" >&2
-              exit 1
-            }
-          done
+          sudo apt-get update
+          sudo apt-get install --yes jq python3-jsonschema zstd
+          (cd "$RELEASE_DIR" && sha256sum --check --strict SHA256SUMS)
+          install -d -m 0700 "$RUNNER_TEMP/signed-pack"
+          cp -- "$RELEASE_DIR/"* "$RUNNER_TEMP/signed-pack/"
+          rm -- "$RUNNER_TEMP/signed-pack/SHA256SUMS"
+          ./scripts/verify-runtime-pack.sh --pack-dir "$RUNNER_TEMP/signed-pack" \
+            --public-key "$(tr -d '[:space:]' < release/runtime-pack-ed25519-public-key.hex)"
 
       - name: Attest signed release artifacts
         id: provenance
@@ -363,26 +284,38 @@ jobs:
             printf -- '- Build provenance: %s\n' "$ATTESTATION_URL"
             printf -- "- Installation source: \`%s\`\n" "$SOURCE_BASE_URL"
           } > "$notes"
+          mapfile -d '' assets < <(find "$RELEASE_DIR" -maxdepth 1 -type f -print0 | sort -z)
           gh release create "$RELEASE_TAG" \
             --repo "$GITHUB_REPOSITORY" \
             --target "$SOURCE_SHA" \
+            --draft \
             --title "$RELEASE_TAG" \
             --notes-file "$notes" \
-            "$RELEASE_DIR/${RELEASE_TAG}.tar.gz" \
-            "$RELEASE_DIR/SHA256SUMS" \
-            "$RELEASE_DIR/release-handoff.json" \
-            "$RELEASE_DIR/ed25519-public-key.hex"
+            "${assets[@]}"
+          # Check server-stored bytes before publishing and locking the release.
+          install -d -m 0700 "$RUNNER_TEMP/draft-assets"
+          gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+            --dir "$RUNNER_TEMP/draft-assets"
+          diff --recursive -- "$RELEASE_DIR" "$RUNNER_TEMP/draft-assets"
+          gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --draft=false
           test "$(gh release view "$RELEASE_TAG" \
             --repo "$GITHUB_REPOSITORY" \
             --json isImmutable \
             --jq .isImmutable)" = true
+
+      - name: Verify anonymous public GitHub asset delivery
+        env:
+          SOURCE_BASE_URL: ${{ inputs.source_base_url }}
+        run: |
+          python3 ./scripts/fetch-runtime-pack-release.py \
+            --base-url "$SOURCE_BASE_URL" --expected-pack "$RELEASE_DIR"
 
       - name: Remove transient workflow artifacts
         if: success()
         run: |
           candidate_name="runtime-pack-candidate-$GITHUB_RUN_ID"
           while IFS=$'\t' read -r artifact_id artifact_name; do
-            if [[ "$artifact_name" == "$candidate_name" || "$artifact_name" == github-pages ]]; then
+            if [[ "$artifact_name" == "$candidate_name" || "$artifact_name" == "${{ inputs.release_tag }}" ]]; then
               gh api --method DELETE "repos/$GITHUB_REPOSITORY/actions/artifacts/$artifact_id"
             fi
           done < <(

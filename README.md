@@ -193,10 +193,14 @@ the pack. The protected `runtime-pack-release.yml` workflow accepts a
 checksum-pinned unsigned archive rooted at `pack/`, validates the required VM
 driver and attested Ubuntu Node/Python images, verifies GitHub provenance for
 every OCI digest, signs with the protected environment key, checks the derived
-public key against the source-controlled pin, publishes the unpacked pack at a
-canonical no-redirect GitHub Pages URL, rechecks every published byte, attests
-the release files through GitHub OIDC, and publishes an immutable-tagged GitHub
-release. See the
+public key against the source-controlled pin, signs both compressed transport
+and expanded artifact identities, attests the files through GitHub OIDC, verifies
+uploaded draft bytes, publishes immutable GitHub Release assets, and rechecks
+anonymous public downloads with a bounded GitHub-only HTTPS redirect policy.
+Use `--compression zstd` with `scripts/assemble-runtime-pack.sh` for this path;
+source payloads are flat `.zst` files and the manifest uses schema 3. Existing
+Pages downloads remain available without being republished by the new workflow.
+See the
 [release policy](docs/release.md) for environment setup, publication gates,
 and key handling.
 

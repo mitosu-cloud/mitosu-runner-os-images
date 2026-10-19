@@ -8,15 +8,20 @@ SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
 source "$SCRIPT_DIR/lib/common.sh"
 
 pack_dir=
+github_release=false
 while (($# > 0)); do
   case "$1" in
+    --github-release)
+      github_release=true
+      shift
+      ;;
     --pack-dir)
       (($# >= 2)) || die '--pack-dir requires a value'
       pack_dir=$2
       shift 2
       ;;
     -h | --help)
-      printf 'usage: validate-production-runtime-pack.sh --pack-dir DIRECTORY\n'
+      printf 'usage: validate-production-runtime-pack.sh --pack-dir DIRECTORY [--github-release]\n'
       exit 0
       ;;
     *) die "unknown argument: $1" ;;
@@ -28,8 +33,14 @@ pack_dir=$(realpath -e -- "$pack_dir")
 "$SCRIPT_DIR/verify-runtime-pack-candidate.sh" --pack-dir "$pack_dir" >/dev/null
 manifest="$pack_dir/manifest.json"
 
-[[ $(jq -er '.schema_version' "$manifest") == 2 ]] ||
-  die 'production OpenShell runtime packs must use schema version 2'
+[[ $(jq -er '.schema_version' "$manifest") =~ ^[23]$ ]] ||
+  die 'production OpenShell runtime packs must use schema version 2 or 3'
+if [[ $github_release == true ]]; then
+  jq -e '.schema_version == 3 and all(.artifacts[];
+    .transport.compression == "zstd" and (.transport.path | contains("/") | not)
+    and .transport.size < 2147483648)' "$manifest" >/dev/null ||
+    die 'GitHub Release packs require schema 3, flat zstd transport paths, and assets under 2 GiB'
+fi
 [[ $(jq '[.artifacts[] | select(.name == "openshell_driver_vm" and .executable == true)] | length' "$manifest") -eq 1 ]] ||
   die 'production runtime pack must contain one executable openshell_driver_vm artifact'
 for image_name in openshell_supervisor_image openshell_sandbox_runtime_image; do

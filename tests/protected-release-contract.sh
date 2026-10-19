@@ -91,6 +91,18 @@ pack="$staging/pack"
 [[ $(jq '[.oci_images[] | select(.attestation != null)] | length' "$pack/manifest.json") == 2 ]] ||
   fail 'production assembler did not retain both workload attestations'
 pass 'production pack assembly validates OpenShell and attested Node/Python inputs'
+compressed_pack="$staging/compressed-production"
+"$REPOSITORY_ROOT/scripts/assemble-runtime-pack.sh" \
+  --output "$compressed_pack" --pack-id fixture-compressed-linux-x86_64 \
+  --target-os linux --target-arch x86_64 --oci-images "$staging/oci-images.json" \
+  --compression zstd \
+  --artifact openshell_driver_vm "$staging/openshell-driver-vm" bin/openshell-driver-vm true >/dev/null
+"$REPOSITORY_ROOT/scripts/validate-production-runtime-pack.sh" --pack-dir "$compressed_pack" --github-release >/dev/null
+if "$REPOSITORY_ROOT/scripts/validate-production-runtime-pack.sh" --pack-dir "$pack" --github-release >/dev/null 2>&1; then
+  fail 'GitHub Release validator accepted uncompressed source paths'
+fi
+pass 'production GitHub packs require compressed flat assets and preserve workload attestations'
+
 
 printf 'undeclared\n' >"$pack/extra.txt"
 if "$REPOSITORY_ROOT/scripts/verify-runtime-pack-candidate.sh" --pack-dir "$pack" \
@@ -181,18 +193,15 @@ grep -Fq 'release/runtime-pack-ed25519-public-key.hex' "$workflow" ||
   fail 'runtime-pack workflow does not compare against the source-controlled public key'
 grep -Fq -- '--json isImmutable' "$workflow" ||
   fail 'runtime-pack workflow does not verify its published release is immutable'
-grep -Fq 'actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b' "$workflow" ||
-  fail 'runtime-pack workflow does not pin the reviewed Pages artifact action'
-grep -Fq 'actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e' "$workflow" ||
-  fail 'runtime-pack workflow does not pin the reviewed Pages deployment action'
-grep -Fq 'needs: [validate-candidate, sign-runtime-pack, deploy-runtime-pack]' "$workflow" ||
-  fail 'immutable release publication is not ordered after direct hosting'
-grep -Fq -- "--proto '=https' --tlsv1.2 --max-redirs 0" "$workflow" ||
-  fail 'published runtime-pack verification permits redirects'
-grep -Fq 'scripts/stage-runtime-pack-pages.sh' "$workflow" ||
-  fail 'runtime-pack workflow does not preserve prior immutable Pages directories'
-[[ $(grep -Fc -- '--json isImmutable' "$workflow") -ge 2 ]] ||
-  fail 'runtime-pack workflow does not require prior releases to be immutable'
+grep -Fq 'needs: [validate-candidate, sign-runtime-pack]' "$workflow" ||
+  fail 'release publication is not ordered after validation and protected signing'
+grep -Fq -- '--draft=false' "$workflow" ||
+  fail 'release is not finalized after draft byte verification'
+grep -Fq 'scripts/fetch-runtime-pack-release.py' "$workflow" ||
+  fail 'public GitHub assets are not independently verified'
+if grep -Fq 'actions/deploy-pages@' "$workflow"; then
+  fail 'new Release asset publication would replace historical Pages downloads'
+fi
 provenance_pin_count=0
 for workflow_file in "$workflow" "$publish_workflow"; do
   workflow_pin_count=$(grep -Fc \
