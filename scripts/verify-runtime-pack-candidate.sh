@@ -76,71 +76,8 @@ jq -e '
 ' "$pack_dir/manifest.json" >/dev/null ||
   die 'runtime-pack manifest contains duplicate names, paths, attestations, or an attested OpenShell control image'
 
-declare -A artifact_names=()
-declare -A portable_paths=()
-declare -A expected_files=([manifest.json]=present)
-artifact_paths=()
-total_size=0
-while IFS=$'\t' read -r name relative_path expected_size expected_sha256 executable; do
-  [[ -z ${artifact_names[$name]+present} ]] || die "duplicate artifact name: $name"
-  artifact_names[$name]=present
-  portable_path=${relative_path,,}
-  [[ -z ${portable_paths[$portable_path]+present} ]] ||
-    die "duplicate or case-colliding artifact path: $relative_path"
-  portable_paths[$portable_path]=present
-  case "$portable_path/" in
-    manifest.json/* | manifest.sig/* | ed25519-public-key.hex/* | release-handoff.json/* | complete/*)
-      die "artifact path overlaps a runtime-pack control file: $relative_path"
-      ;;
-  esac
-  artifact_paths+=("$portable_path")
-  expected_files[$relative_path]=present
-
-  current_path=$pack_dir
-  IFS='/' read -r -a path_components <<<"$relative_path"
-  for component in "${path_components[@]}"; do
-    current_path="$current_path/$component"
-    [[ ! -L $current_path ]] || die "artifact path traverses a symlink: $relative_path"
-  done
-  [[ -f $current_path ]] || die "artifact is missing or not a regular file: $relative_path"
-  actual_size=$(wc -c <"$current_path")
-  actual_size=${actual_size//[[:space:]]/}
-  [[ $actual_size == "$expected_size" ]] || die "artifact size mismatch: $relative_path"
-  [[ $(sha256_file "$current_path") == "$expected_sha256" ]] ||
-    die "artifact SHA-256 mismatch: $relative_path"
-  if [[ $executable == true ]]; then
-    [[ -x $current_path ]] || die "artifact is not executable as declared: $relative_path"
-  else
-    [[ ! -x $current_path ]] || die "artifact is executable but declared non-executable: $relative_path"
-  fi
-  total_size=$((total_size + expected_size))
-  ((total_size <= 34359738368)) || die 'runtime pack exceeds 32 GiB'
-done < <(jq -r '.artifacts[] | [.name, .path, (.size | tostring), .sha256, (.executable | tostring)] | @tsv' "$pack_dir/manifest.json")
-
-for path in "${artifact_paths[@]}"; do
-  for other in "${artifact_paths[@]}"; do
-    [[ $path == "$other" ]] && continue
-    [[ "$other/" != "$path/"* ]] || die "artifact path is a prefix of another path: $path"
-  done
-done
-
+args=("$pack_dir")
 if [[ $signed == true ]]; then
-  expected_files[manifest.sig]=present
-  [[ ! -e $pack_dir/ed25519-public-key.hex ]] || expected_files[ed25519-public-key.hex]=present
-  [[ ! -e $pack_dir/release-handoff.json ]] || expected_files[release-handoff.json]=present
+  args+=(--signed)
 fi
-
-special_path=$(find "$pack_dir" -mindepth 1 ! -type f ! -type d -print -quit)
-if [[ -n $special_path ]]; then
-  die 'runtime pack contains a symlink or special file'
-fi
-while IFS= read -r relative_path; do
-  [[ -n ${expected_files[$relative_path]+present} ]] ||
-    die "runtime pack contains an undeclared file: $relative_path"
-done < <(find "$pack_dir" -mindepth 1 -type f -printf '%P\n')
-
-jq -S -n \
-  --arg pack_id "$(jq -er '.pack_id' "$pack_dir/manifest.json")" \
-  --argjson artifact_count "${#artifact_names[@]}" \
-  --argjson total_size "$total_size" \
-  '{status: "validated", pack_id: $pack_id, artifact_count: $artifact_count, total_size: $total_size}'
+python3 "$SCRIPT_DIR/verify-runtime-pack-files.py" "${args[@]}"
