@@ -142,9 +142,10 @@ sha256sum candidate.tar.gz
 To keep candidate staging on GitHub, upload that archive to a **draft** release
 and pass its API asset URL,
 `https://api.github.com/repos/mitosu-cloud/mitosu-runner-os-images/releases/assets/ASSET_ID`.
-The validation job uses its existing read-only `GH_TOKEN` through `gh api` only
-for an exact same-repository asset URL, checks the declared and downloaded
-lengths, then checks the separately pinned candidate SHA-256. Credentials do
+GitHub requires push-capable access to private draft assets. Only the existing
+protected `runtime-release` job fetches them, with its `GH_TOKEN` through
+`gh api` for an exact same-repository asset URL. It checks declared/downloaded
+lengths and the separately pinned candidate SHA-256. Credentials do
 not enter argv or generic-origin requests. Other HTTPS candidate sources remain
 credential-free. The draft need not be published or made immutable; retain it
 on failure and remove it after the final runtime release succeeds.
@@ -153,22 +154,25 @@ Dispatch `.github/workflows/runtime-pack-release.yml` with the exact source
 SHA, `runtime-pack-<pack_id>` release tag, HTTPS candidate URL, candidate
 SHA-256, and the explicit GitHub Release download directory URL for that tag.
 The protected workflow requires schema 3, compressed flat source paths and
-individual payloads below 2 GiB. Candidate validation runs without the signing
-secret. It rejects path
+individual payloads below 2 GiB. A read-only job validates the reviewed source,
+input URL/identity contract and repository tests first. After environment
+approval, the protected job validates candidate bytes and OCI provenance before
+the signing step receives the private key. It rejects path
 traversal, links, special files, undeclared files, size or mode mismatches,
 mutable or local OCI references, missing `openshell_driver_vm`, missing
 OpenShell control images, and missing attested `ubuntu-26.04-node` or
 `ubuntu-26.04-python` images for the selected guest architecture.
 
-The protected job downloads the validated candidate through the Actions
-artifact boundary, rechecks the original SHA-256, re-extracts and validates it,
-signs it, and stages the exact signed manifest, signature, public handoff and
+The protected job downloads the SHA-pinned candidate from its reviewed source,
+extracts and validates it without executing bundled artifacts, verifies OCI
+provenance, then injects the private key only into the subsequent signing step.
+It signs and stages the exact signed manifest, signature, public handoff and
 compressed payloads. The final job rechecks the source-controlled trust pin,
 attests each release file, uploads a draft, independently downloads and compares
 all draft assets, then publishes and checks `isImmutable`. It verifies every
 public asset again without GitHub credentials using bounded HTTPS-only GitHub
-asset redirects. Only a successful result removes the transient candidate and
-signed-output Actions artifacts. Existing tags are refused; an interrupted
+asset redirects. Only a successful result removes the transient signed-output
+Actions artifact. Existing tags are refused; an interrupted
 draft is retained for inspection and is not silently overwritten. A public
 verification failure leaves the immutable release and failed workflow as
 evidence; it does not claim successful installation qualification.
