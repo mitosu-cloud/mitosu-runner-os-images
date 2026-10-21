@@ -3,7 +3,8 @@ SHELL := /usr/bin/env bash
 
 MITOSU_BUILD_ROOT ?= /tmp/mitosu-runner-os-images
 TMPDIR := /tmp
-export MITOSU_BUILD_ROOT TMPDIR
+PYTHONDONTWRITEBYTECODE := 1
+export MITOSU_BUILD_ROOT TMPDIR PYTHONDONTWRITEBYTECODE
 
 .PHONY: help validate resolve test lint verify-inputs build smoke verify publish runtime-pack assemble-runtime-pack sign-runtime-pack verify-runtime-pack clean
 
