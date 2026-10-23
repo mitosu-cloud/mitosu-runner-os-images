@@ -226,8 +226,8 @@ grep -Fq -- '--draft=false' "$workflow" ||
   fail 'release is not finalized after draft byte verification'
 grep -Fq 'scripts/fetch-runtime-pack-release.py' "$workflow" ||
   fail 'public GitHub assets are not independently verified'
-[[ $(grep -Fc 'runs-on: [self-hosted, Linux, ARM64]' "$workflow") -eq 3 ]] ||
-  fail 'all protected runtime-pack jobs must use the ARM64 self-hosted lane'
+[[ $(grep -Fc 'runs-on: [self-hosted, Linux, ARM64, runtime-pack-release]' "$workflow") -eq 3 ]] ||
+  fail 'all protected runtime-pack jobs must use the dedicated ARM64 release lane'
 if grep -Fq 'runs-on: [self-hosted, Linux, X64]' "$workflow"; then
   fail 'protected runtime-pack workflow still targets the lossy x86_64 lane'
 fi
@@ -244,8 +244,8 @@ if grep -Fq 'actions/deploy-pages@' "$workflow"; then
 fi
 [[ -f $stage_workflow && ! -L $stage_workflow ]] ||
   fail 'protected candidate staging workflow is missing or unsafe'
-grep -Fq 'runs-on: [self-hosted, Linux, ARM64]' "$stage_workflow" ||
-  fail 'candidate staging does not use the ARM64 self-hosted lane'
+grep -Fq 'runs-on: [self-hosted, Linux, ARM64, runtime-pack-release]' "$stage_workflow" ||
+  fail 'candidate staging does not use the dedicated ARM64 release lane'
 grep -Fq 'environment: runtime-release' "$stage_workflow" ||
   fail 'candidate staging is not protected by the release environment'
 grep -Fq 'STAGING_ROOT: /tmp/mitosu-runtime-pack-candidates' "$stage_workflow" ||
