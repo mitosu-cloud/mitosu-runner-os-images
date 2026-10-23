@@ -252,6 +252,12 @@ if grep -Fq 'MITOSU_RUNTIME_PACK_SIGNING_KEY_PEM' "$publish_workflow"; then
 fi
 grep -Fq 'RUSTFLAGS="-C relocation-model=static"' "$control_workflow" ||
   fail 'OpenShell sandbox is not forced to a launchable static MUSL executable'
+# GitHub expressions must remain literal here.
+# shellcheck disable=SC2016
+grep -Fq 'targets: ${{ matrix.gnu_target }},${{ matrix.musl_target }}' "$control_workflow" ||
+  fail 'OpenShell publication does not install both Rust targets on bare runners'
+grep -Fq 'dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c' "$control_workflow" ||
+  fail 'OpenShell publication does not pin its rustup bootstrap action'
 [[ $(grep -Fc 'cache-binary: false' "$control_workflow") -eq 2 ]] ||
   fail 'OpenShell publication allows setup-buildx to use GitHub cache storage'
 grep -Fq 'packages+=(docker.io)' "$control_workflow" ||
