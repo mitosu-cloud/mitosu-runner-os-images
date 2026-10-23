@@ -202,8 +202,10 @@ pages_site="$staging/pages-site"
 pass 'Pages staging preserves prior signed packs beside the current release'
 
 workflow="$REPOSITORY_ROOT/.github/workflows/runtime-pack-release.yml"
+stage_workflow="$REPOSITORY_ROOT/.github/workflows/stage-runtime-pack-candidate.yml"
 publish_workflow="$REPOSITORY_ROOT/.github/workflows/self-hosted-publish.yml"
 control_workflow="$REPOSITORY_ROOT/.github/workflows/openshell-control-images.yml"
+gh_installer="$REPOSITORY_ROOT/scripts/install-pinned-gh.sh"
 release_public_key="$REPOSITORY_ROOT/release/runtime-pack-ed25519-public-key.hex"
 [[ -f $release_public_key && ! -L $release_public_key ]] ||
   fail 'source-controlled release public key is missing or unsafe'
@@ -224,9 +226,48 @@ grep -Fq -- '--draft=false' "$workflow" ||
   fail 'release is not finalized after draft byte verification'
 grep -Fq 'scripts/fetch-runtime-pack-release.py' "$workflow" ||
   fail 'public GitHub assets are not independently verified'
+[[ $(grep -Fc 'runs-on: [self-hosted, Linux, ARM64]' "$workflow") -eq 3 ]] ||
+  fail 'all protected runtime-pack jobs must use the ARM64 self-hosted lane'
+if grep -Fq 'runs-on: [self-hosted, Linux, X64]' "$workflow"; then
+  fail 'protected runtime-pack workflow still targets the lossy x86_64 lane'
+fi
+[[ $(grep -Fc 'scripts/install-pinned-gh.sh' "$workflow") -eq 2 ]] ||
+  fail 'runtime-pack signing and publication do not install the pinned GitHub CLI'
+grep -Fq 'packages+=(docker.io)' "$workflow" ||
+  fail 'runtime-pack signing does not provision Docker on a bare runner'
+# The workflow shell expression must remain literal here.
+# shellcheck disable=SC2016
+grep -Fq 'sudo setfacl -m "u:$(id -un):rw" /var/run/docker.sock' "$workflow" ||
+  fail 'runtime-pack signing does not grant access to its Docker socket'
 if grep -Fq 'actions/deploy-pages@' "$workflow"; then
   fail 'new Release asset publication would replace historical Pages downloads'
 fi
+[[ -f $stage_workflow && ! -L $stage_workflow ]] ||
+  fail 'protected candidate staging workflow is missing or unsafe'
+grep -Fq 'runs-on: [self-hosted, Linux, ARM64]' "$stage_workflow" ||
+  fail 'candidate staging does not use the ARM64 self-hosted lane'
+grep -Fq 'environment: runtime-release' "$stage_workflow" ||
+  fail 'candidate staging is not protected by the release environment'
+grep -Fq 'STAGING_ROOT: /tmp/mitosu-runtime-pack-candidates' "$stage_workflow" ||
+  fail 'candidate staging does not use its fixed protected directory'
+grep -Fq 'sha256sum --check --strict' "$stage_workflow" ||
+  fail 'candidate staging does not verify the reviewed SHA-256'
+# GitHub workflow shell variables must remain literal here.
+# shellcheck disable=SC2016
+grep -Fq '&& "$is_draft" == true' "$stage_workflow" ||
+  fail 'candidate staging does not require an existing draft release'
+grep -Fq 'draft release already has candidate asset' "$stage_workflow" ||
+  fail 'candidate staging does not refuse an existing same-named asset'
+grep -Fq 'scripts/install-pinned-gh.sh' "$stage_workflow" ||
+  fail 'candidate staging does not install the pinned GitHub CLI'
+[[ -x $gh_installer && ! -L $gh_installer ]] ||
+  fail 'pinned GitHub CLI installer is missing, unsafe, or not executable'
+grep -Fq 'readonly version=2.100.0' "$gh_installer" ||
+  fail 'GitHub CLI installer does not pin the reviewed version'
+grep -Fq 'ea4e7a581a32ccad6cc7923cb1576ac5859ba4b9a16ab22eb8f8a96e78e2e961' \
+  "$gh_installer" || fail 'GitHub CLI installer does not pin the reviewed ARM64 checksum'
+grep -Fq 'e4d4bb4498e8d007abe545b6568926793ace1b6447da598294a610018cb164be' \
+  "$gh_installer" || fail 'GitHub CLI installer does not pin the reviewed x86_64 checksum'
 provenance_pin_count=0
 for workflow_file in "$workflow" "$publish_workflow"; do
   workflow_pin_count=$(grep -Fc \
