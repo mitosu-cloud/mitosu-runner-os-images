@@ -35,7 +35,7 @@ defaults:
 jobs:
   validate-candidate:
     name: Validate reviewed release source
-    runs-on: [self-hosted, Linux, X64]
+    runs-on: [self-hosted, Linux, ARM64]
     timeout-minutes: 45
     permissions:
       attestations: read
@@ -91,8 +91,8 @@ jobs:
   sign-runtime-pack:
     name: Validate, sign, and stage reviewed runtime pack
     needs: validate-candidate
-    runs-on: [self-hosted, Linux, X64]
-    timeout-minutes: 30
+    runs-on: [self-hosted, Linux, ARM64]
+    timeout-minutes: 45
     environment: runtime-release
     permissions:
       contents: write
@@ -112,7 +112,20 @@ jobs:
         run: |
           test "$(git rev-parse HEAD)" = "${{ inputs.source_sha }}"
           sudo apt-get update
-          sudo apt-get install --yes jq python3-jsonschema zstd
+          packages=(acl ca-certificates curl jq python3-jsonschema zstd)
+          if ! command -v docker >/dev/null 2>&1; then
+            packages+=(docker.io)
+          fi
+          sudo apt-get install --yes --no-install-recommends "${packages[@]}"
+          sudo systemctl start docker
+          test -S /var/run/docker.sock
+          sudo setfacl -m "u:$(id -un):rw" /var/run/docker.sock
+          docker version
+
+      - name: Install pinned GitHub CLI
+        run: |
+          ./scripts/install-pinned-gh.sh "$RUNNER_TEMP/gh-cli"
+          printf '%s\n' "$RUNNER_TEMP/gh-cli" >> "$GITHUB_PATH"
 
       - name: Download and validate candidate
         id: candidate
@@ -208,8 +221,8 @@ jobs:
   publish-release:
     name: Attest, publish, and verify immutable GitHub assets
     needs: [validate-candidate, sign-runtime-pack]
-    runs-on: [self-hosted, Linux, X64]
-    timeout-minutes: 20
+    runs-on: [self-hosted, Linux, ARM64]
+    timeout-minutes: 60
     permissions:
       actions: write
       attestations: write
@@ -234,13 +247,19 @@ jobs:
       - name: Reverify signed release bytes
         run: |
           sudo apt-get update
-          sudo apt-get install --yes jq python3-jsonschema zstd
+          sudo apt-get install --yes --no-install-recommends \
+            ca-certificates curl jq python3-jsonschema zstd
           (cd "$RELEASE_DIR" && sha256sum --check --strict SHA256SUMS)
           install -d -m 0700 "$RUNNER_TEMP/signed-pack"
           cp -- "$RELEASE_DIR/"* "$RUNNER_TEMP/signed-pack/"
           rm -- "$RUNNER_TEMP/signed-pack/SHA256SUMS"
           ./scripts/verify-runtime-pack.sh --pack-dir "$RUNNER_TEMP/signed-pack" \
             --public-key "$(tr -d '[:space:]' < release/runtime-pack-ed25519-public-key.hex)"
+
+      - name: Install pinned GitHub CLI
+        run: |
+          ./scripts/install-pinned-gh.sh "$RUNNER_TEMP/gh-cli"
+          printf '%s\n' "$RUNNER_TEMP/gh-cli" >> "$GITHUB_PATH"
 
       - name: Attest signed release artifacts
         id: provenance
