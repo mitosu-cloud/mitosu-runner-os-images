@@ -87,6 +87,18 @@ jobs:
           rustup target add --toolchain 1.95.0 \
             "${{ matrix.gnu_target }}" "${{ matrix.musl_target }}"
 
+      - name: Prepare local container engine
+        run: |
+          packages=(acl)
+          if ! command -v docker >/dev/null 2>&1; then
+            packages+=(docker.io)
+          fi
+          sudo apt-get install --yes --no-install-recommends "${packages[@]}"
+          sudo systemctl start docker
+          test -S /var/run/docker.sock
+          sudo setfacl -m "u:$(id -un):rw" /var/run/docker.sock
+          docker version
+
       # CARGO_TARGET_DIR is persistent on these self-hosted workers. Do not
       # upload compiler caches to GitHub Actions storage.
 
@@ -103,7 +115,8 @@ jobs:
           GIT_DIR=/nonexistent cargo +1.95.0 build --locked --release \
             --target "$GNU_TARGET" \
             --package openshell-supervisor --bin openshell-supervisor
-          GIT_DIR=/nonexistent cargo +1.95.0 build --locked --release \
+          RUSTFLAGS="-C relocation-model=static" \
+            GIT_DIR=/nonexistent cargo +1.95.0 build --locked --release \
             --target "$MUSL_TARGET" \
             --package openshell-sandbox --bin openshell-sandbox
 
@@ -135,6 +148,8 @@ jobs:
           sha256sum "$supervisor" "$sandbox"
 
       - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+        with:
+          cache-binary: false
 
       - name: Log in to GHCR
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
@@ -220,6 +235,8 @@ jobs:
           [[ "$RELEASE_TAG" =~ ^[a-z0-9][a-z0-9._-]{0,63}$ ]]
 
       - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+        with:
+          cache-binary: false
 
       - name: Log in to GHCR
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
