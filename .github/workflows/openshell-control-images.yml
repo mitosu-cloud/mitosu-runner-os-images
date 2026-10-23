@@ -87,13 +87,8 @@ jobs:
           rustup target add --toolchain 1.95.0 \
             "${{ matrix.gnu_target }}" "${{ matrix.musl_target }}"
 
-      - name: Cache Rust artifacts
-        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
-        with:
-          shared-key: mitosu-runtime-${{ matrix.architecture }}
-          cache-on-failure: "true"
-          cache-workspace-crates: "true"
-          cache-bin: "false"
+      # CARGO_TARGET_DIR is persistent on these self-hosted workers. Do not
+      # upload compiler caches to GitHub Actions storage.
 
       - name: Build exact runtime binaries
         env:
@@ -181,8 +176,6 @@ jobs:
               --label org.opencontainers.image.source="https://github.com/mitosu-cloud/openshell" \
               --label org.opencontainers.image.revision="$SOURCE_SHA" \
               --tag "$reference" \
-              --cache-from "type=gha,scope=mitosu-$component-$ARCHITECTURE" \
-              --cache-to "type=gha,mode=max,scope=mitosu-$component-$ARCHITECTURE" \
               --provenance=false \
               --metadata-file "$metadata" \
               --push \
