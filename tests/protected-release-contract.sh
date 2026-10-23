@@ -203,6 +203,7 @@ pass 'Pages staging preserves prior signed packs beside the current release'
 
 workflow="$REPOSITORY_ROOT/.github/workflows/runtime-pack-release.yml"
 publish_workflow="$REPOSITORY_ROOT/.github/workflows/self-hosted-publish.yml"
+control_workflow="$REPOSITORY_ROOT/.github/workflows/openshell-control-images.yml"
 release_public_key="$REPOSITORY_ROOT/release/runtime-pack-ed25519-public-key.hex"
 [[ -f $release_public_key && ! -L $release_public_key ]] ||
   fail 'source-controlled release public key is missing or unsafe'
@@ -249,4 +250,14 @@ grep -Fq 'rm -f -- "$HOME/.docker/config.json"' "$publish_workflow" ||
 if grep -Fq 'MITOSU_RUNTIME_PACK_SIGNING_KEY_PEM' "$publish_workflow"; then
   fail 'image publication job references the runtime-pack signing key'
 fi
+grep -Fq 'RUSTFLAGS="-C relocation-model=static"' "$control_workflow" ||
+  fail 'OpenShell sandbox is not forced to a launchable static MUSL executable'
+[[ $(grep -Fc 'cache-binary: false' "$control_workflow") -eq 2 ]] ||
+  fail 'OpenShell publication allows setup-buildx to use GitHub cache storage'
+grep -Fq 'packages+=(docker.io)' "$control_workflow" ||
+  fail 'OpenShell publication does not provision Docker on a bare self-hosted runner'
+# The workflow shell expression must remain literal here.
+# shellcheck disable=SC2016
+grep -Fq 'sudo setfacl -m "u:$(id -un):rw" /var/run/docker.sock' "$control_workflow" ||
+  fail 'OpenShell publication does not grant the runner access to its Docker socket'
 pass 'protected workflows isolate signing and pin GitHub provenance actions'
