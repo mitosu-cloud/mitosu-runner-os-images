@@ -31,7 +31,7 @@ defaults:
 jobs:
   stage-candidate:
     name: Upload reviewed candidate to protected draft
-    runs-on: [self-hosted, Linux, ARM64]
+    runs-on: [self-hosted, Linux, ARM64, runtime-pack-release]
     timeout-minutes: 90
     environment: runtime-release
     permissions:
