@@ -35,7 +35,7 @@ defaults:
 jobs:
   validate-candidate:
     name: Validate reviewed release source
-    runs-on: ubuntu-24.04
+    runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 45
     permissions:
       attestations: read
@@ -91,7 +91,7 @@ jobs:
   sign-runtime-pack:
     name: Validate, sign, and stage reviewed runtime pack
     needs: validate-candidate
-    runs-on: ubuntu-24.04
+    runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 30
     environment: runtime-release
     permissions:
@@ -208,7 +208,7 @@ jobs:
   publish-release:
     name: Attest, publish, and verify immutable GitHub assets
     needs: [validate-candidate, sign-runtime-pack]
-    runs-on: ubuntu-24.04
+    runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 20
     permissions:
       actions: write
