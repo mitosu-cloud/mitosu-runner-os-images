@@ -37,11 +37,11 @@ jobs:
       matrix:
         include:
           - architecture: amd64
-            runner: ubuntu-24.04
+            runner: [self-hosted, Linux, X64]
             gnu_target: x86_64-unknown-linux-gnu
             musl_target: x86_64-unknown-linux-musl
           - architecture: arm64
-            runner: ubuntu-24.04-arm
+            runner: [self-hosted, Linux, ARM64]
             gnu_target: aarch64-unknown-linux-gnu
             musl_target: aarch64-unknown-linux-musl
     env:
@@ -207,7 +207,7 @@ jobs:
   publish-index:
     name: Publish immutable multi-architecture indexes
     needs: build
-    runs-on: ubuntu-24.04
+    runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 20
     environment: runtime-release
     permissions:
