@@ -226,6 +226,16 @@ grep -Fq -- '--draft=false' "$workflow" ||
   fail 'release is not finalized after draft byte verification'
 grep -Fq 'scripts/fetch-runtime-pack-release.py' "$workflow" ||
   fail 'public GitHub assets are not independently verified'
+grep -Fq 'candidate_run_id:' "$workflow" ||
+  fail 'runtime-pack release does not require an immutable staging run ID'
+grep -Fq 'stage-runtime-pack-candidate.yml' "$workflow" ||
+  fail 'runtime-pack release does not authenticate the candidate staging workflow'
+# GitHub expressions must remain literal here.
+# shellcheck disable=SC2016
+grep -Fq 'run-id: ${{ inputs.candidate_run_id }}' "$workflow" ||
+  fail 'runtime-pack release does not download from the exact staging run'
+[[ $(grep -Fc 'actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093' \
+  "$workflow") -eq 2 ]] || fail 'runtime-pack release does not pin both artifact downloads'
 [[ $(grep -Fc 'runs-on: [self-hosted, Linux, ARM64, runtime-pack-release]' "$workflow") -eq 3 ]] ||
   fail 'all protected runtime-pack jobs must use the dedicated ARM64 release lane'
 if grep -Fq 'runs-on: [self-hosted, Linux, X64]' "$workflow"; then
@@ -252,14 +262,21 @@ grep -Fq 'STAGING_ROOT: /tmp/mitosu-runtime-pack-candidates' "$stage_workflow" |
   fail 'candidate staging does not use its fixed protected directory'
 grep -Fq 'sha256sum --check --strict' "$stage_workflow" ||
   fail 'candidate staging does not verify the reviewed SHA-256'
-# GitHub workflow shell variables must remain literal here.
+grep -Fq 'actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02' \
+  "$stage_workflow" || fail 'candidate staging does not pin artifact upload'
+grep -Fq 'compression-level: 0' "$stage_workflow" ||
+  fail 'candidate staging recompresses an already compressed runtime pack'
+grep -Fq 'retention-days: 1' "$stage_workflow" ||
+  fail 'candidate staging retains the transient artifact too long'
+[[ $(grep -Fc 'compression-level: 0' "$workflow") -eq 1 ]] ||
+  fail 'signed runtime-pack artifacts are recompressed in transit'
+# GitHub expressions must remain literal here.
 # shellcheck disable=SC2016
-grep -Fq '&& "$is_draft" == true' "$stage_workflow" ||
-  fail 'candidate staging does not require an existing draft release'
-grep -Fq 'draft release already has candidate asset' "$stage_workflow" ||
-  fail 'candidate staging does not refuse an existing same-named asset'
-grep -Fq 'scripts/install-pinned-gh.sh' "$stage_workflow" ||
-  fail 'candidate staging does not install the pinned GitHub CLI'
+grep -Fq 'name: runtime-pack-candidate-${{ inputs.candidate_sha256 }}' "$stage_workflow" ||
+  fail 'candidate staging artifact is not bound to the reviewed SHA-256'
+if grep -Fq 'gh release upload' "$stage_workflow"; then
+  fail 'candidate staging still uses the non-resumable GitHub Release upload path'
+fi
 [[ -x $gh_installer && ! -L $gh_installer ]] ||
   fail 'pinned GitHub CLI installer is missing, unsafe, or not executable'
 grep -Fq 'readonly version=2.100.0' "$gh_installer" ||

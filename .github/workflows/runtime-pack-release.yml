@@ -11,8 +11,8 @@ on:
         description: Immutable tag; must equal runtime-pack- plus the manifest pack_id
         required: true
         type: string
-      candidate_url:
-        description: HTTPS unsigned pack archive, or same-repository GitHub draft asset API URL
+      candidate_run_id:
+        description: Successful protected staging workflow run containing the immutable candidate artifact
         required: true
         type: string
       candidate_sha256:
@@ -43,15 +43,16 @@ jobs:
       packages: read
     env:
       GH_TOKEN: ${{ github.token }}
-      MITOSU_BUILD_ROOT: /tmp/mitosu-runner-os-images
+      MITOSU_BUILD_ROOT: /tmp/mitosu-runner-os-images-${{ github.run_id }}-${{ github.run_attempt }}-validate
     outputs:
       pack_id: ${{ steps.inputs.outputs.pack_id }}
+      candidate_artifact: ${{ steps.inputs.outputs.candidate_artifact }}
     steps:
       - name: Validate immutable inputs
         id: inputs
         env:
           CANDIDATE_SHA256: ${{ inputs.candidate_sha256 }}
-          CANDIDATE_URL: ${{ inputs.candidate_url }}
+          CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
           RELEASE_TAG: ${{ inputs.release_tag }}
           SOURCE_BASE_URL: ${{ inputs.source_base_url }}
           SOURCE_SHA: ${{ inputs.source_sha }}
@@ -59,18 +60,16 @@ jobs:
           [[ "$SOURCE_SHA" =~ ^[a-f0-9]{40}$ ]]
           [[ "$RELEASE_TAG" =~ ^[a-z0-9][a-z0-9._-]{0,127}$ ]]
           [[ "$CANDIDATE_SHA256" =~ ^[a-f0-9]{64}$ ]]
-          for url in "$CANDIDATE_URL" "$SOURCE_BASE_URL"; do
-            [[ "$url" == https://* ]]
-            [[ "$url" != *\?* && "$url" != *\#* ]]
-            authority=${url#https://}
-            authority=${authority%%/*}
-            [[ -n "$authority" && "$authority" != *@* ]]
-          done
+          [[ "$CANDIDATE_RUN_ID" =~ ^[1-9][0-9]{0,19}$ ]]
+          [[ "$SOURCE_BASE_URL" == https://* ]]
+          [[ "$SOURCE_BASE_URL" != *\?* && "$SOURCE_BASE_URL" != *\#* ]]
           [[ "$SOURCE_BASE_URL" == */ ]]
           expected_source="https://github.com/$GITHUB_REPOSITORY/releases/download/$RELEASE_TAG/"
           test "$SOURCE_BASE_URL" = "$expected_source"
           [[ "$RELEASE_TAG" == runtime-pack-* ]]
           printf 'pack_id=%s\n' "${RELEASE_TAG#runtime-pack-}" >> "$GITHUB_OUTPUT"
+          printf 'candidate_artifact=runtime-pack-candidate-%s\n' \
+            "$CANDIDATE_SHA256" >> "$GITHUB_OUTPUT"
 
       - name: Check out exact source revision
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -95,12 +94,13 @@ jobs:
     timeout-minutes: 45
     environment: runtime-release
     permissions:
+      actions: read
       contents: write
       attestations: read
       packages: read
     env:
       GH_TOKEN: ${{ github.token }}
-      MITOSU_BUILD_ROOT: /tmp/mitosu-runner-os-images
+      MITOSU_BUILD_ROOT: /tmp/mitosu-runner-os-images-${{ github.run_id }}-${{ github.run_attempt }}-sign
     steps:
       - name: Check out exact source revision
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -127,16 +127,50 @@ jobs:
           ./scripts/install-pinned-gh.sh "$RUNNER_TEMP/gh-cli"
           printf '%s\n' "$RUNNER_TEMP/gh-cli" >> "$GITHUB_PATH"
 
-      - name: Download and validate candidate
+      - name: Verify protected candidate staging run
+        env:
+          CANDIDATE_ARTIFACT: ${{ needs.validate-candidate.outputs.candidate_artifact }}
+          CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+        run: |
+          run_record=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$CANDIDATE_RUN_ID" \
+            --jq '[.conclusion, .event, .head_sha, .path] | @tsv')
+          IFS=$'\t' read -r conclusion event head_sha workflow_path <<< "$run_record"
+          test "$conclusion" = success
+          test "$event" = workflow_dispatch
+          test "$head_sha" = "$SOURCE_SHA"
+          test "$workflow_path" = .github/workflows/stage-runtime-pack-candidate.yml
+          artifact_json=$(gh api \
+            "repos/$GITHUB_REPOSITORY/actions/runs/$CANDIDATE_RUN_ID/artifacts")
+          match_count=$(jq -er --arg name "$CANDIDATE_ARTIFACT" \
+            '[.artifacts[] | select(.name == $name and (.expired | not))] | length' \
+            <<< "$artifact_json")
+          test "$match_count" -eq 1
+
+      - name: Download immutable candidate artifact
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: ${{ needs.validate-candidate.outputs.candidate_artifact }}
+          path: /tmp/mitosu-runner-os-images-${{ github.run_id }}-${{ github.run_attempt }}-sign/release-input/artifact
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.candidate_run_id }}
+
+      - name: Validate candidate artifact
         id: candidate
         env:
           CANDIDATE_SHA256: ${{ inputs.candidate_sha256 }}
-          CANDIDATE_URL: ${{ inputs.candidate_url }}
           RELEASE_TAG: ${{ inputs.release_tag }}
         run: |
           install -d -m 0700 "$MITOSU_BUILD_ROOT/release-input"
+          artifact_dir="$MITOSU_BUILD_ROOT/release-input/artifact"
+          entry_count=$(find "$artifact_dir" -mindepth 1 -maxdepth 1 -printf . | wc -c)
+          test "$entry_count" -eq 1
+          mapfile -d '' candidate_files < <(
+            find "$artifact_dir" -mindepth 1 -maxdepth 1 -type f -print0
+          )
+          test "${#candidate_files[@]}" -eq 1
           candidate="$MITOSU_BUILD_ROOT/release-input/candidate.tar"
-          ./scripts/download-runtime-pack-candidate.sh "$CANDIDATE_URL" "$candidate"
+          mv -- "${candidate_files[0]}" "$candidate"
           printf '%s  %s\n' "$CANDIDATE_SHA256" "$candidate" | sha256sum --check --strict
           ./scripts/extract-runtime-pack-candidate.py \
             "$candidate" "$MITOSU_BUILD_ROOT/release-input/extracted"
@@ -214,8 +248,9 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: ${{ inputs.release_tag }}
-          path: /tmp/mitosu-runner-os-images/release-output/
+          path: /tmp/mitosu-runner-os-images-${{ github.run_id }}-${{ github.run_attempt }}-sign/release-output/
           if-no-files-found: error
+          compression-level: 0
           retention-days: 30
 
   publish-release:
@@ -230,13 +265,13 @@ jobs:
       id-token: write
     env:
       GH_TOKEN: ${{ github.token }}
-      RELEASE_DIR: /tmp/mitosu-runner-os-images/release-output
+      RELEASE_DIR: /tmp/mitosu-runner-os-images-${{ github.run_id }}-${{ github.run_attempt }}-publish/release-output
     steps:
       - name: Download signed release bundle
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: ${{ inputs.release_tag }}
-          path: /tmp/mitosu-runner-os-images/release-output
+          path: /tmp/mitosu-runner-os-images-${{ github.run_id }}-${{ github.run_attempt }}-publish/release-output
 
       - name: Check out exact source revision
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -265,7 +300,7 @@ jobs:
         id: provenance
         uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3.0.0
         with:
-          subject-checksums: /tmp/mitosu-runner-os-images/release-output/SHA256SUMS
+          subject-checksums: /tmp/mitosu-runner-os-images-${{ github.run_id }}-${{ github.run_attempt }}-publish/release-output/SHA256SUMS
 
       - name: Publish immutable GitHub release
         env:
@@ -317,13 +352,26 @@ jobs:
 
       - name: Remove transient workflow artifacts
         if: success()
+        env:
+          CANDIDATE_ARTIFACT: ${{ needs.validate-candidate.outputs.candidate_artifact }}
+          CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
         run: |
           while IFS=$'\t' read -r artifact_id artifact_name; do
-            if [[ "$artifact_name" == "${{ inputs.release_tag }}" ]]; then
+            if [[ "$artifact_name" == "$RELEASE_TAG" ]]; then
               gh api --method DELETE "repos/$GITHUB_REPOSITORY/actions/artifacts/$artifact_id"
             fi
           done < <(
             gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/artifacts" \
+              --paginate \
+              --jq '.artifacts[] | [.id, .name] | @tsv'
+          )
+          while IFS=$'\t' read -r artifact_id artifact_name; do
+            if [[ "$artifact_name" == "$CANDIDATE_ARTIFACT" ]]; then
+              gh api --method DELETE "repos/$GITHUB_REPOSITORY/actions/artifacts/$artifact_id"
+            fi
+          done < <(
+            gh api "repos/$GITHUB_REPOSITORY/actions/runs/$CANDIDATE_RUN_ID/artifacts" \
               --paginate \
               --jq '.artifacts[] | [.id, .name] | @tsv'
           )
