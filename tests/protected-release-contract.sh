@@ -206,6 +206,7 @@ stage_workflow="$REPOSITORY_ROOT/.github/workflows/stage-runtime-pack-candidate.
 publish_workflow="$REPOSITORY_ROOT/.github/workflows/self-hosted-publish.yml"
 control_workflow="$REPOSITORY_ROOT/.github/workflows/openshell-control-images.yml"
 gh_installer="$REPOSITORY_ROOT/scripts/install-pinned-gh.sh"
+release_uploader="$REPOSITORY_ROOT/scripts/upload-runtime-pack-release.sh"
 release_public_key="$REPOSITORY_ROOT/release/runtime-pack-ed25519-public-key.hex"
 [[ -f $release_public_key && ! -L $release_public_key ]] ||
   fail 'source-controlled release public key is missing or unsafe'
@@ -226,6 +227,10 @@ grep -Fq -- '--draft=false' "$workflow" ||
   fail 'release is not finalized after draft byte verification'
 grep -Fq 'scripts/fetch-runtime-pack-release.py' "$workflow" ||
   fail 'public GitHub assets are not independently verified'
+grep -Fq 'scripts/upload-runtime-pack-release.sh' "$workflow" ||
+  fail 'runtime-pack publication does not use the reviewed sequential uploader'
+grep -Fq 'Remove incomplete draft after publication failure' "$workflow" ||
+  fail 'runtime-pack publication does not clean failed draft releases'
 grep -Fq 'candidate_run_id:' "$workflow" ||
   fail 'runtime-pack release does not require an immutable staging run ID'
 grep -Fq 'stage-runtime-pack-candidate.yml' "$workflow" ||
@@ -287,6 +292,14 @@ grep -Fq 'ea4e7a581a32ccad6cc7923cb1576ac5859ba4b9a16ab22eb8f8a96e78e2e961' \
   "$gh_installer" || fail 'GitHub CLI installer does not pin the reviewed ARM64 checksum'
 grep -Fq 'e4d4bb4498e8d007abe545b6568926793ace1b6447da598294a610018cb164be' \
   "$gh_installer" || fail 'GitHub CLI installer does not pin the reviewed x86_64 checksum'
+[[ -x $release_uploader && ! -L $release_uploader ]] ||
+  fail 'sequential release uploader is missing, unsafe, or not executable'
+grep -Fq -- '--http1.1' "$release_uploader" ||
+  fail 'release uploader does not force HTTP/1.1'
+grep -Fq 'server_digest' "$release_uploader" ||
+  fail 'release uploader does not verify server-recorded digests'
+grep -Fq 'release must not contain assets before upload' "$release_uploader" ||
+  fail 'release uploader does not require an empty draft'
 provenance_pin_count=0
 for workflow_file in "$workflow" "$publish_workflow"; do
   workflow_pin_count=$(grep -Fc \

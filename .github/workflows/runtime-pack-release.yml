@@ -292,6 +292,7 @@ jobs:
             --public-key "$(tr -d '[:space:]' < release/runtime-pack-ed25519-public-key.hex)"
 
       - name: Install pinned GitHub CLI
+        id: gh_cli
         run: |
           ./scripts/install-pinned-gh.sh "$RUNNER_TEMP/gh-cli"
           printf '%s\n' "$RUNNER_TEMP/gh-cli" >> "$GITHUB_PATH"
@@ -303,6 +304,7 @@ jobs:
           subject-checksums: /tmp/mitosu-runner-os-images-${{ github.run_id }}-${{ github.run_attempt }}-publish/release-output/SHA256SUMS
 
       - name: Publish immutable GitHub release
+        id: publish
         env:
           ATTESTATION_URL: ${{ steps.provenance.outputs.attestation-url }}
           RELEASE_TAG: ${{ inputs.release_tag }}
@@ -324,14 +326,17 @@ jobs:
             printf -- '- Build provenance: %s\n' "$ATTESTATION_URL"
             printf -- "- Installation source: \`%s\`\n" "$SOURCE_BASE_URL"
           } > "$notes"
-          mapfile -d '' assets < <(find "$RELEASE_DIR" -maxdepth 1 -type f -print0 | sort -z)
           gh release create "$RELEASE_TAG" \
             --repo "$GITHUB_REPOSITORY" \
             --target "$SOURCE_SHA" \
             --draft \
             --title "$RELEASE_TAG" \
-            --notes-file "$notes" \
-            "${assets[@]}"
+            --notes-file "$notes"
+          release_id=$(gh release view "$RELEASE_TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --json databaseId --jq .databaseId)
+          ./scripts/upload-runtime-pack-release.sh \
+            "$GITHUB_REPOSITORY" "$release_id" "$RELEASE_DIR"
           # Check server-stored bytes before publishing and locking the release.
           install -d -m 0700 "$RUNNER_TEMP/draft-assets"
           gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
@@ -342,6 +347,21 @@ jobs:
             --repo "$GITHUB_REPOSITORY" \
             --json isImmutable \
             --jq .isImmutable)" = true
+
+      - name: Remove incomplete draft after publication failure
+        if: failure() && steps.gh_cli.outcome == 'success' && steps.publish.outcome == 'failure'
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          release_record=$(gh release view "$RELEASE_TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --json databaseId,isDraft \
+            --jq '[.databaseId, .isDraft] | @tsv' 2>/dev/null || true)
+          if [[ -n "$release_record" ]]; then
+            IFS=$'\t' read -r release_id is_draft <<< "$release_record"
+            [[ "$release_id" =~ ^[0-9]+$ && "$is_draft" == true ]]
+            gh api --method DELETE "repos/$GITHUB_REPOSITORY/releases/$release_id"
+          fi
 
       - name: Verify anonymous public GitHub asset delivery
         env:
