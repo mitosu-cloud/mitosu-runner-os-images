@@ -236,8 +236,10 @@ grep -Fq 'run-id: ${{ inputs.candidate_run_id }}' "$workflow" ||
   fail 'runtime-pack release does not download from the exact staging run'
 [[ $(grep -Fc 'actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093' \
   "$workflow") -eq 2 ]] || fail 'runtime-pack release does not pin both artifact downloads'
-[[ $(grep -Fc 'runs-on: [self-hosted, Linux, ARM64, runtime-pack-release]' "$workflow") -eq 3 ]] ||
-  fail 'all protected runtime-pack jobs must use the dedicated ARM64 release lane'
+[[ $(grep -Fc 'runs-on: [self-hosted, Linux, ARM64, runtime-pack-release]' "$workflow") -eq 2 ]] ||
+  fail 'runtime-pack validation and signing must use the dedicated ARM64 release lane'
+[[ $(grep -Fc 'runs-on: [self-hosted, Linux, ARM64, runtime-pack-publish]' "$workflow") -eq 1 ]] ||
+  fail 'runtime-pack publication must use the dedicated ARM64 publisher lane'
 if grep -Fq 'runs-on: [self-hosted, Linux, X64]' "$workflow"; then
   fail 'protected runtime-pack workflow still targets the lossy x86_64 lane'
 fi
