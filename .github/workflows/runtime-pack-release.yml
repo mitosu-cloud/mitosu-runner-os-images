@@ -257,7 +257,10 @@ jobs:
     name: Attest, publish, and verify immutable GitHub assets
     needs: [validate-candidate, sign-runtime-pack]
     runs-on: [self-hosted, Linux, ARM64, runtime-pack-publish]
-    timeout-minutes: 60
+    # uploads.github.com is substantially slower than Actions artifact storage on
+    # the protected publisher path. Preserve the measured low-speed guard below,
+    # but allow the reviewed 567 MB bundle to finish at its observed throughput.
+    timeout-minutes: 180
     permissions:
       actions: write
       attestations: write
