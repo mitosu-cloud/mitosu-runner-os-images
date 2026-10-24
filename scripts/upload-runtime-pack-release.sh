@@ -63,10 +63,11 @@ for asset in "${assets[@]}"; do
   : > "$response"
   if ! curl --config "$curl_config" \
       --http1.1 --fail-with-body --silent --show-error \
-      --connect-timeout 30 --max-time 3600 \
+      --connect-timeout 30 --max-time 7200 \
       --speed-limit 32768 --speed-time 120 \
       --header 'Content-Type: application/octet-stream' \
       --request POST --data-binary "@$asset" \
+      --write-out 'upload transport: remote_ip=%{remote_ip} http_version=%{http_version} speed_upload=%{speed_upload} time_total=%{time_total}\n' \
       --output "$response" "$upload_url"; then
     while IFS=$'\t' read -r asset_id server_name state; do
       if [[ $server_name == "$name" && $state == starter ]]; then

@@ -229,6 +229,8 @@ grep -Fq 'scripts/fetch-runtime-pack-release.py' "$workflow" ||
   fail 'public GitHub assets are not independently verified'
 grep -Fq 'scripts/upload-runtime-pack-release.sh' "$workflow" ||
   fail 'runtime-pack publication does not use the reviewed sequential uploader'
+grep -Fq 'timeout-minutes: 180' "$workflow" ||
+  fail 'runtime-pack publisher cannot accommodate measured release-upload throughput'
 grep -Fq 'Remove incomplete draft after publication failure' "$workflow" ||
   fail 'runtime-pack publication does not clean failed draft releases'
 grep -Fq 'candidate_run_id:' "$workflow" ||
@@ -296,6 +298,10 @@ grep -Fq 'e4d4bb4498e8d007abe545b6568926793ace1b6447da598294a610018cb164be' \
   fail 'sequential release uploader is missing, unsafe, or not executable'
 grep -Fq -- '--http1.1' "$release_uploader" ||
   fail 'release uploader does not force HTTP/1.1'
+grep -Fq -- '--max-time 7200' "$release_uploader" ||
+  fail 'release uploader does not allow a measured large-asset transfer to finish'
+grep -Fq 'speed_upload=%{speed_upload}' "$release_uploader" ||
+  fail 'release uploader does not report safe transport throughput diagnostics'
 grep -Fq 'server_digest' "$release_uploader" ||
   fail 'release uploader does not verify server-recorded digests'
 grep -Fq 'release must not contain assets before upload' "$release_uploader" ||
