@@ -256,7 +256,7 @@ jobs:
   publish-release:
     name: Attest, publish, and verify immutable GitHub assets
     needs: [validate-candidate, sign-runtime-pack]
-    runs-on: [self-hosted, Linux, ARM64, runtime-pack-release]
+    runs-on: [self-hosted, Linux, ARM64, runtime-pack-publish]
     timeout-minutes: 60
     permissions:
       actions: write
