@@ -32,7 +32,9 @@ jobs:
     environment: runtime-release
     permissions:
       actions: write
-      contents: read
+      # GitHub exposes private draft-release assets only to push-capable tokens.
+      # The protected job accepts only this repository's exact numeric asset URL.
+      contents: write
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
