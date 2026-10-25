@@ -7,8 +7,8 @@ on:
         description: Exact 40-character runner-images revision containing this workflow
         required: true
         type: string
-      candidate_name:
-        description: Pre-staged candidate filename under the protected runner staging directory
+      candidate_asset_url:
+        description: Exact same-repository GitHub API URL for the private draft-release asset
         required: true
         type: string
       candidate_sha256:
@@ -34,7 +34,7 @@ jobs:
       actions: write
       contents: read
     env:
-      STAGING_ROOT: /tmp/mitosu-runtime-pack-candidates
+      GH_TOKEN: ${{ github.token }}
     steps:
       - name: Check out exact source revision
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -42,22 +42,35 @@ jobs:
           ref: ${{ inputs.source_sha }}
           persist-credentials: false
 
-      - name: Validate pre-staged candidate
-        id: candidate
+      - name: Validate immutable inputs
         env:
-          CANDIDATE_NAME: ${{ inputs.candidate_name }}
+          CANDIDATE_ASSET_URL: ${{ inputs.candidate_asset_url }}
           CANDIDATE_SHA256: ${{ inputs.candidate_sha256 }}
           SOURCE_SHA: ${{ inputs.source_sha }}
         run: |
           test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
           [[ "$SOURCE_SHA" =~ ^[a-f0-9]{40}$ ]]
-          [[ "$CANDIDATE_NAME" =~ ^[a-z0-9][a-z0-9._-]{0,191}\.tar$ ]]
           [[ "$CANDIDATE_SHA256" =~ ^[a-f0-9]{64}$ ]]
-          [[ -d "$STAGING_ROOT" && ! -L "$STAGING_ROOT" ]]
-          test "$(realpath -e -- "$STAGING_ROOT")" = "$STAGING_ROOT"
-          candidate="$STAGING_ROOT/$CANDIDATE_NAME"
-          [[ -f "$candidate" && ! -L "$candidate" ]]
-          test "$(realpath -e -- "$candidate")" = "$candidate"
+          asset_prefix="https://api.github.com/repos/$GITHUB_REPOSITORY/releases/assets/"
+          [[ "$CANDIDATE_ASSET_URL" == "$asset_prefix"* ]]
+          asset_id=${CANDIDATE_ASSET_URL#"$asset_prefix"}
+          [[ "$asset_id" =~ ^[1-9][0-9]{0,19}$ ]]
+
+      - name: Install pinned GitHub CLI
+        run: |
+          ./scripts/install-pinned-gh.sh "$RUNNER_TEMP/gh-cli"
+          printf '%s\n' "$RUNNER_TEMP/gh-cli" >> "$GITHUB_PATH"
+
+      - name: Download and validate candidate
+        id: candidate
+        env:
+          CANDIDATE_ASSET_URL: ${{ inputs.candidate_asset_url }}
+          CANDIDATE_SHA256: ${{ inputs.candidate_sha256 }}
+        run: |
+          candidate="$RUNNER_TEMP/runtime-pack-candidate-$CANDIDATE_SHA256.tar"
+          [[ ! -e "$candidate" && ! -L "$candidate" ]]
+          ./scripts/download-runtime-pack-candidate.sh \
+            "$CANDIDATE_ASSET_URL" "$candidate"
           printf '%s  %s\n' "$CANDIDATE_SHA256" "$candidate" |
             sha256sum --check --strict
           printf 'path=%s\n' "$candidate" >> "$GITHUB_OUTPUT"
@@ -72,7 +85,7 @@ jobs:
           compression-level: 0
           retention-days: 1
 
-      - name: Remove pre-staged candidate after verified upload
+      - name: Remove downloaded candidate after verified upload
         if: success()
         env:
           CANDIDATE_PATH: ${{ steps.candidate.outputs.path }}
@@ -80,4 +93,3 @@ jobs:
           [[ "${{ steps.upload.outputs.artifact-id }}" =~ ^[0-9]+$ ]]
           [[ "${{ steps.upload.outputs.artifact-digest }}" =~ ^[a-f0-9]{64}$ ]]
           rm -- "$CANDIDATE_PATH"
-          rmdir --ignore-fail-on-non-empty -- "$STAGING_ROOT"

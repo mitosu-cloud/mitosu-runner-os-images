@@ -139,20 +139,23 @@ tar -C /path/to/parent -czf candidate.tar.gz pack
 sha256sum candidate.tar.gz
 ```
 
-To keep candidate staging on GitHub, upload that archive to a **draft** release
-and pass its API asset URL,
+Upload that archive to a **draft** release and pass its API asset URL to
+`.github/workflows/stage-runtime-pack-candidate.yml`,
 `https://api.github.com/repos/mitosu-cloud/mitosu-runner-os-images/releases/assets/ASSET_ID`.
 GitHub requires push-capable access to private draft assets. Only the existing
-protected `runtime-release` job fetches them, with its `GH_TOKEN` through
-`gh api` for an exact same-repository asset URL. It checks declared/downloaded
-lengths and the separately pinned candidate SHA-256. Credentials do
-not enter argv or generic-origin requests. Other HTTPS candidate sources remain
-credential-free. The draft need not be published or made immutable; retain it
-on failure and remove it after the final runtime release succeeds.
+protected `runtime-release` staging job fetches them, with its `GH_TOKEN`
+through `gh api` for an exact same-repository asset URL. It checks
+declared/downloaded lengths and the separately pinned candidate SHA-256, then
+uploads the verified bytes as a one-day, uncompressed Actions artifact. The
+staging job no longer depends on a particular self-hosted runner's filesystem.
+Credentials do not enter argv or generic-origin requests. The draft need not be
+published or made immutable; retain it on failure and remove it after the final
+runtime release succeeds.
 
-Dispatch `.github/workflows/runtime-pack-release.yml` with the exact source
-SHA, `runtime-pack-<pack_id>` release tag, HTTPS candidate URL, candidate
-SHA-256, and the explicit GitHub Release download directory URL for that tag.
+After staging succeeds, dispatch `.github/workflows/runtime-pack-release.yml`
+with the exact source SHA, `runtime-pack-<pack_id>` release tag, successful
+candidate staging run ID, candidate SHA-256, and the explicit GitHub Release
+download directory URL for that tag.
 The protected workflow requires schema 3, compressed flat source paths and
 individual payloads below 2 GiB. A read-only job validates the reviewed source,
 input URL/identity contract and repository tests first. After environment
