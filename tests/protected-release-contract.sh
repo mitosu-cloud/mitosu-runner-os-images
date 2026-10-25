@@ -269,6 +269,8 @@ grep -Fq 'environment: runtime-release' "$stage_workflow" ||
   fail 'candidate staging is not protected by the release environment'
 grep -Fq 'candidate_asset_url:' "$stage_workflow" ||
   fail 'candidate staging does not require an exact draft-release asset URL'
+# The workflow shell variable must remain literal here.
+# shellcheck disable=SC2016
 grep -Fq 'https://api.github.com/repos/$GITHUB_REPOSITORY/releases/assets/' \
   "$stage_workflow" || fail 'candidate staging does not restrict authenticated ingress to its repository'
 grep -Fq 'scripts/download-runtime-pack-candidate.sh' "$stage_workflow" ||
