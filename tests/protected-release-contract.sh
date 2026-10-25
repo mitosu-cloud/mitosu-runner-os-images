@@ -267,6 +267,8 @@ grep -Fq 'runs-on: [self-hosted, Linux, ARM64, runtime-pack-release]' "$stage_wo
   fail 'candidate staging does not use the dedicated ARM64 release lane'
 grep -Fq 'environment: runtime-release' "$stage_workflow" ||
   fail 'candidate staging is not protected by the release environment'
+grep -Fq 'contents: write' "$stage_workflow" ||
+  fail 'protected candidate staging cannot read private draft-release assets'
 grep -Fq 'candidate_asset_url:' "$stage_workflow" ||
   fail 'candidate staging does not require an exact draft-release asset URL'
 # The workflow shell variable must remain literal here.
