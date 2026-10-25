@@ -267,8 +267,16 @@ grep -Fq 'runs-on: [self-hosted, Linux, ARM64, runtime-pack-release]' "$stage_wo
   fail 'candidate staging does not use the dedicated ARM64 release lane'
 grep -Fq 'environment: runtime-release' "$stage_workflow" ||
   fail 'candidate staging is not protected by the release environment'
-grep -Fq 'STAGING_ROOT: /tmp/mitosu-runtime-pack-candidates' "$stage_workflow" ||
-  fail 'candidate staging does not use its fixed protected directory'
+grep -Fq 'candidate_asset_url:' "$stage_workflow" ||
+  fail 'candidate staging does not require an exact draft-release asset URL'
+# The workflow shell variable must remain literal here.
+# shellcheck disable=SC2016
+grep -Fq 'https://api.github.com/repos/$GITHUB_REPOSITORY/releases/assets/' \
+  "$stage_workflow" || fail 'candidate staging does not restrict authenticated ingress to its repository'
+grep -Fq 'scripts/download-runtime-pack-candidate.sh' "$stage_workflow" ||
+  fail 'candidate staging does not use the bounded reviewed downloader'
+grep -Fq 'scripts/install-pinned-gh.sh' "$stage_workflow" ||
+  fail 'candidate staging does not install the pinned GitHub CLI'
 grep -Fq 'sha256sum --check --strict' "$stage_workflow" ||
   fail 'candidate staging does not verify the reviewed SHA-256'
 grep -Fq 'actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02' \
@@ -285,6 +293,9 @@ grep -Fq 'name: runtime-pack-candidate-${{ inputs.candidate_sha256 }}' "$stage_w
   fail 'candidate staging artifact is not bound to the reviewed SHA-256'
 if grep -Fq 'gh release upload' "$stage_workflow"; then
   fail 'candidate staging still uses the non-resumable GitHub Release upload path'
+fi
+if grep -Fq 'STAGING_ROOT:' "$stage_workflow"; then
+  fail 'candidate staging still depends on one runner host filesystem'
 fi
 [[ -x $gh_installer && ! -L $gh_installer ]] ||
   fail 'pinned GitHub CLI installer is missing, unsafe, or not executable'
