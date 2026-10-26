@@ -32,6 +32,8 @@ done
 pack_dir=$(realpath -e -- "$pack_dir")
 "$SCRIPT_DIR/verify-runtime-pack-candidate.sh" --pack-dir "$pack_dir" >/dev/null
 manifest="$pack_dir/manifest.json"
+require_command python3
+require_command zstd
 
 [[ $(jq -er '.schema_version' "$manifest") =~ ^[23]$ ]] ||
   die 'production OpenShell runtime packs must use schema version 2 or 3'
@@ -43,6 +45,7 @@ if [[ $github_release == true ]]; then
 fi
 [[ $(jq '[.artifacts[] | select(.name == "openshell_driver_vm" and .executable == true)] | length' "$manifest") -eq 1 ]] ||
   die 'production runtime pack must contain one executable openshell_driver_vm artifact'
+python3 "$SCRIPT_DIR/verify-openshell-driver-provenance.py" "$pack_dir" >/dev/null
 for image_name in openshell_supervisor_image openshell_sandbox_runtime_image; do
   [[ $(jq --arg name "$image_name" '[.oci_images[] | select(.name == $name and .attestation == null)] | length' "$manifest") -eq 1 ]] ||
     die "production runtime pack must contain one unattested $image_name entry"

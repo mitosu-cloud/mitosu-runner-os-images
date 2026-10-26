@@ -60,6 +60,17 @@ compressed size and compressed SHA-256. Build with `--compression zstd` in
 payloads only; verification checks both representations. Each release asset
 must be below GitHub's 2 GiB per-file limit.
 
+Production OpenShell packs must also contain
+`openshell_driver_vm_provenance`. Protected validation requires provenance
+schema 2, a clean source commit shared by the driver and its source-sensitive
+embedded runtime, and an explicit fresh supervisor-bundle build. It locates
+each declared compressed runtime payload inside the driver, verifies both its
+compressed and expanded identity without executing candidate code, and checks
+that the embedded supervisor and sandbox versions identify the same source
+commit. The supervisor must also contain the driver's
+`--parent-liveness-stdin` contract. Reused or merely asserted embedded bytes are
+rejected before the signing key is injected.
+
 The agent authenticates transport bytes before bounded in-process expansion,
 then verifies expanded bytes before atomic publication. Its storage admission
 covers all expanded files plus the largest temporary compressed file and
