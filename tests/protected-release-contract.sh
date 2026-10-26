@@ -20,8 +20,91 @@ pass() {
   printf 'ok - %s\n' "$1"
 }
 
-printf '#!/bin/sh\nprintf "driver fixture\\n"\n' >"$staging/openshell-driver-vm"
+source_commit=1111111111111111111111111111111111111111
+source_version=0.1.0+g111111111
+printf '#!/bin/sh\nprintf "driver fixture %s\\n"\n' "$source_version" >"$staging/openshell-driver-vm"
 chmod 0755 -- "$staging/openshell-driver-vm"
+embedded="$staging/embedded-runtime"
+mkdir -m 0700 -- "$embedded"
+printf 'libkrun fixture\n' >"$embedded/libkrun.so"
+printf 'libkrunfw fixture\n' >"$embedded/libkrunfw.so.5"
+printf 'openshell-sandbox fixture %s\n' "$source_version" >"$embedded/openshell-sandbox"
+printf 'openshell-supervisor fixture %s --parent-liveness-stdin\n' \
+  "$source_version" >"$embedded/openshell-supervisor"
+printf 'openshell-vm-init fixture\n' >"$embedded/openshell-vm-init"
+printf 'umoci fixture\n' >"$embedded/umoci"
+for embedded_name in \
+  libkrun.so libkrunfw.so.5 openshell-sandbox openshell-supervisor openshell-vm-init umoci; do
+  zstd --quiet --force "$embedded/$embedded_name" -o "$embedded/$embedded_name.zst"
+  cat -- "$embedded/$embedded_name.zst" >>"$staging/openshell-driver-vm"
+done
+driver_sha256=$(sha256_file "$staging/openshell-driver-vm")
+driver_bytes=$(wc -c <"$staging/openshell-driver-vm")
+cat >"$staging/openshell-driver-vm-provenance.json" <<EOF
+{
+  "schema_version": 2,
+  "artifact": "openshell_driver_vm",
+  "clean_build_checkout": true,
+  "source_repository": "https://github.com/mitosu-cloud/openshell",
+  "source_branch": "mitosu-main",
+  "source_commit": "$source_commit",
+  "driver_version": "openshell-driver-vm $source_version",
+  "driver_sha256": "$driver_sha256",
+  "driver_bytes": $driver_bytes,
+  "embedded_runtime": {
+    "source_commit": "$source_commit",
+    "source_sensitive_reused": false,
+    "build_command": "tasks/scripts/vm/build-supervisor-bundle.sh --arch x86_64",
+    "artifacts": [
+      {
+        "name": "libkrun.so.zst",
+        "compressed_bytes": $(wc -c <"$embedded/libkrun.so.zst"),
+        "compressed_sha256": "$(sha256_file "$embedded/libkrun.so.zst")",
+        "expanded_bytes": $(wc -c <"$embedded/libkrun.so"),
+        "expanded_sha256": "$(sha256_file "$embedded/libkrun.so")"
+      },
+      {
+        "name": "libkrunfw.so.5.zst",
+        "compressed_bytes": $(wc -c <"$embedded/libkrunfw.so.5.zst"),
+        "compressed_sha256": "$(sha256_file "$embedded/libkrunfw.so.5.zst")",
+        "expanded_bytes": $(wc -c <"$embedded/libkrunfw.so.5"),
+        "expanded_sha256": "$(sha256_file "$embedded/libkrunfw.so.5")"
+      },
+      {
+        "name": "openshell-sandbox.zst",
+        "version": "openshell-sandbox $source_version",
+        "compressed_bytes": $(wc -c <"$embedded/openshell-sandbox.zst"),
+        "compressed_sha256": "$(sha256_file "$embedded/openshell-sandbox.zst")",
+        "expanded_bytes": $(wc -c <"$embedded/openshell-sandbox"),
+        "expanded_sha256": "$(sha256_file "$embedded/openshell-sandbox")"
+      },
+      {
+        "name": "openshell-supervisor.zst",
+        "version": "openshell-supervisor $source_version",
+        "parent_liveness_stdin": true,
+        "compressed_bytes": $(wc -c <"$embedded/openshell-supervisor.zst"),
+        "compressed_sha256": "$(sha256_file "$embedded/openshell-supervisor.zst")",
+        "expanded_bytes": $(wc -c <"$embedded/openshell-supervisor"),
+        "expanded_sha256": "$(sha256_file "$embedded/openshell-supervisor")"
+      },
+      {
+        "name": "openshell-vm-init.zst",
+        "compressed_bytes": $(wc -c <"$embedded/openshell-vm-init.zst"),
+        "compressed_sha256": "$(sha256_file "$embedded/openshell-vm-init.zst")",
+        "expanded_bytes": $(wc -c <"$embedded/openshell-vm-init"),
+        "expanded_sha256": "$(sha256_file "$embedded/openshell-vm-init")"
+      },
+      {
+        "name": "umoci.zst",
+        "compressed_bytes": $(wc -c <"$embedded/umoci.zst"),
+        "compressed_sha256": "$(sha256_file "$embedded/umoci.zst")",
+        "expanded_bytes": $(wc -c <"$embedded/umoci"),
+        "expanded_sha256": "$(sha256_file "$embedded/umoci")"
+      }
+    ]
+  }
+}
+EOF
 digest() {
   local character=$1
   local index
@@ -84,6 +167,7 @@ pack="$staging/pack"
   --target-arch x86_64 \
   --oci-images "$staging/oci-images.json" \
   --artifact openshell_driver_vm "$staging/openshell-driver-vm" bin/openshell-driver-vm true \
+  --artifact openshell_driver_vm_provenance "$staging/openshell-driver-vm-provenance.json" bin/openshell-driver-vm-provenance.json false \
   >/dev/null
 "$REPOSITORY_ROOT/scripts/validate-production-runtime-pack.sh" --pack-dir "$pack" >/dev/null
 [[ $(jq -r '.schema_version' "$pack/manifest.json") == 2 ]] ||
@@ -96,12 +180,37 @@ compressed_pack="$staging/compressed-production"
   --output "$compressed_pack" --pack-id fixture-compressed-linux-x86_64 \
   --target-os linux --target-arch x86_64 --oci-images "$staging/oci-images.json" \
   --compression zstd \
-  --artifact openshell_driver_vm "$staging/openshell-driver-vm" bin/openshell-driver-vm true >/dev/null
+  --artifact openshell_driver_vm "$staging/openshell-driver-vm" bin/openshell-driver-vm true \
+  --artifact openshell_driver_vm_provenance "$staging/openshell-driver-vm-provenance.json" bin/openshell-driver-vm-provenance.json false >/dev/null
 "$REPOSITORY_ROOT/scripts/validate-production-runtime-pack.sh" --pack-dir "$compressed_pack" --github-release >/dev/null
 if "$REPOSITORY_ROOT/scripts/validate-production-runtime-pack.sh" --pack-dir "$pack" --github-release >/dev/null 2>&1; then
   fail 'GitHub Release validator accepted uncompressed source paths'
 fi
 pass 'production GitHub packs require compressed flat assets and preserve workload attestations'
+
+missing_provenance_pack="$staging/missing-provenance"
+"$REPOSITORY_ROOT/scripts/assemble-runtime-pack.sh" \
+  --output "$missing_provenance_pack" --pack-id fixture-missing-provenance-linux-x86_64 \
+  --target-os linux --target-arch x86_64 --oci-images "$staging/oci-images.json" \
+  --artifact openshell_driver_vm "$staging/openshell-driver-vm" bin/openshell-driver-vm true >/dev/null
+if "$REPOSITORY_ROOT/scripts/validate-production-runtime-pack.sh" \
+    --pack-dir "$missing_provenance_pack" >/dev/null 2>&1; then
+  fail 'production validator accepted a driver without embedded-runtime provenance'
+fi
+stale_provenance="$staging/stale-provenance.json"
+jq '.embedded_runtime.source_commit = "2222222222222222222222222222222222222222"' \
+  "$staging/openshell-driver-vm-provenance.json" >"$stale_provenance"
+stale_provenance_pack="$staging/stale-provenance-pack"
+"$REPOSITORY_ROOT/scripts/assemble-runtime-pack.sh" \
+  --output "$stale_provenance_pack" --pack-id fixture-stale-provenance-linux-x86_64 \
+  --target-os linux --target-arch x86_64 --oci-images "$staging/oci-images.json" \
+  --artifact openshell_driver_vm "$staging/openshell-driver-vm" bin/openshell-driver-vm true \
+  --artifact openshell_driver_vm_provenance "$stale_provenance" bin/openshell-driver-vm-provenance.json false >/dev/null
+if "$REPOSITORY_ROOT/scripts/validate-production-runtime-pack.sh" \
+    --pack-dir "$stale_provenance_pack" >/dev/null 2>&1; then
+  fail 'production validator accepted a mismatched embedded-runtime source commit'
+fi
+pass 'production validation proves embedded driver bytes and rejects stale source provenance'
 
 
 printf 'undeclared\n' >"$pack/extra.txt"
